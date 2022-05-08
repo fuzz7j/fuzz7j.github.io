@@ -133,6 +133,7 @@ input:-webkit-autofill {
   user-select: auto;
 }
 .footer {
+  text-align: center;
   padding: 15px 0;
   font-size: 14px;
 }

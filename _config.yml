@@ -1,7 +1,7 @@
 encoding: utf-8
 
 # SEO相关信息
-title: fuzz7j Blog
+title: fuzz7j's Blog
 description: fuzz7j's Blog
 keywords: 
 author: 
@@ -27,7 +27,7 @@ tucaoUrl:
 menu:
   - title: 首页
     url: /
-  - title: 归类
+  - title: 归档
     url: /pages/categories.html
   - title: 搜索
     url: /pages/search.html
@@ -37,7 +37,7 @@ menu:
     url: /pages/about.html
 
 # 点击页面文字冒出特效,不需要请设置为false
-extClickEffect: true
+extClickEffect: false
 
 # Google Adsense,不需要请设置为false
 # _includes/ext-adsense.html 里面修改为自己的配置

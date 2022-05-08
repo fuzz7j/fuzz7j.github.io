@@ -1,8 +1,10 @@
 ---
 layout: mypost
-title: 关于我
+title: About Me
 ---
 
-## About Me
+"  
+    她是我多年前的一个老朋友，不过已经死了，我还是很想念她。  
+"
 
-- github: https://github.com/fuzz7j
+Github: [https://github.com/fuzz7j](https://github.com/fuzz7j)
