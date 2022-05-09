@@ -9,7 +9,6 @@ title: 首页
     {%- capture post_next_year %}{{ post.next.date | date: "%Y" }}{% endcapture -%}
     {%- if forloop.first or post_next_year != post_year -%}
     <div class="list-post">
-      <h2 id="{{post_year}}">{{post_year}}</h2>
       <ul>
     {%- endif %}
         <li>
