@@ -29,7 +29,7 @@ JDBC 通常使用不同的 URL/URI 连接字符串来与指定类型的数据库
 
 ## 漏洞环境
 
-https://github.com/fuzz7j/JavaSecuritySourceCode/MySQL_JDBC_Deserialization
+https://github.com/fuzz7j/JavaSecuritySourceCode/tree/master/MySQL_JDBC_Deserialization
 
 ## 漏洞分析
 
