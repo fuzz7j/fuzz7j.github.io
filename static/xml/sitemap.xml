@@ -1,22 +1,51 @@
----
-layout: null
----
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">	
-  {%- for menu in site.menu %}
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
   <url>
-    <loc>{{ site.domainUrl }}{{ site.baseurl }}{{ menu.url }}</loc>
-    <lastmod>{{ site.time | date: "%Y-%m-%d" }}</lastmod>
+    <loc>https://fuzz7j.github.io//</loc>
+    <lastmod>2022-06-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
-  {%- endfor %}
-  {%- for post in site.posts %}
   <url>
-    <loc>{{ site.domainUrl }}{{ site.baseurl }}{{ post.url }}</loc>
-    <lastmod>{{ site.time | date: "%Y-%m-%d" }}</lastmod>
+    <loc>https://fuzz7j.github.io//pages/categories</loc>
+    <lastmod>2022-06-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
-  {%- endfor %}
+  <url>
+    <loc>https://fuzz7j.github.io//pages/search</loc>
+    <lastmod>2022-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fuzz7j.github.io//pages/links</loc>
+    <lastmod>2022-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fuzz7j.github.io//pages/about</loc>
+    <lastmod>2022-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fuzz7j.github.io//articles/MySQL-JDBC-Deserialization/</loc>
+    <lastmod>2022-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fuzz7j.github.io//articles/Spring4Shell/</loc>
+    <lastmod>2022-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fuzz7j.github.io//articles/Windows-Authorization/</loc>
+    <lastmod>2022-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
 </urlset>

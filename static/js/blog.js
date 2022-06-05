@@ -2,7 +2,7 @@
  * 工具，允许多次onload不被覆盖
  * @param {方法} func
  */
- blog.addLoadEvent = function (func) {
+blog.addLoadEvent = function (func) {
   var oldonload = window.onload
   if (typeof window.onload != 'function') {
     window.onload = func

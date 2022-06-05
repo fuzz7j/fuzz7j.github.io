@@ -1,25 +1,34 @@
----
-layout: null
----
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>{{site.title}}</title>
-    <link>{{site.domainUrl | append: site.baseurl }}</link>
-    <description>{{site.description}}</description>
+    <title>fuzz7j's Blog</title>
+    <link>https://fuzz7j.github.io/</link>
+    <description>fuzz7j's Blog</description>
     <language>zh-CN</language>
-    <pubDate>{{ site.time | date_to_rfc822 }}</pubDate>
-    <lastBuildDate>{{site.time | date_to_rfc822}}</lastBuildDate>
-    <generator>Jekyll v{{ jekyll.version }}</generator>
-    <atom:link href="{{ site.domainUrl | append: site.baseurl }}/static/xml/rss.xml" rel="self" type="application/rss+xml" />
-    {%- for post in site.posts %}
+    <pubDate>Sun, 05 Jun 2022 15:11:01 +0800</pubDate>
+    <lastBuildDate>Sun, 05 Jun 2022 15:11:01 +0800</lastBuildDate>
+    <generator>Jekyll v3.8.5</generator>
+    <atom:link href="https://fuzz7j.github.io//static/xml/rss.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>{{post.title | escape}}</title>
-      <link>{{site.domainUrl | append: site.baseurl | append: post.url}}</link>
-      <description>{{post.content | strip_html | strip_newlines | replace: " ", "" | replace: "	", "" | truncate: 120 | escape}}</description>
-      <pubDate>{{post.date | date_to_rfc822}}</pubDate>
-      <gui>{{site.domainUrl | append: site.baseurl | append: post.url}}</gui>
+      <title>MySQL JDBC 客户端反序列化漏洞分析</title>
+      <link>https://fuzz7j.github.io//articles/MySQL-JDBC-Deserialization/</link>
+      <description>前言BlackHatEurope2019《NewExploitTechniqueInJavaDeserializationAttack》议题学习。JavaDataBaseConnectivityJDBC（JavaDatabaseCon...</description>
+      <pubDate>Fri, 27 May 2022 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/MySQL-JDBC-Deserialization/</gui>
     </item>
-    {%- endfor %}
+    <item>
+      <title>CVE-2022-22965学习</title>
+      <link>https://fuzz7j.github.io//articles/Spring4Shell/</link>
+      <description>前言此漏洞源于云舒的一条微博，不过其实并没有达到“核弹级”，顶多是个手榴弹。因为之前没有接触过Autobinding漏洞，正好学习一下，SpringMVC自动绑定漏洞参考这篇文章：浅析自动绑定漏洞之SpringMVCCVE-2010-...</description>
+      <pubDate>Sun, 03 Apr 2022 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/Spring4Shell/</gui>
+    </item>
+    <item>
+      <title>Windows认证机制学习</title>
+      <link>https://fuzz7j.github.io//articles/Windows-Authorization/</link>
+      <description>Kerberos协议非常复杂，学习时每篇文章都有不同之处，本篇文章查询了MSDN，尽量保证准确性，后续学习过程中如果发现内容有误会及时更正。认证协议LMLANManagerChallenge/Response验证机制，简称LM。该方案...</description>
+      <pubDate>Thu, 09 Dec 2021 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/Windows-Authorization/</gui>
+    </item>
   </channel>
 </rss>
