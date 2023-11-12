@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>Windows认证机制学习-fuzz7j's Blog</title>
+  <meta charset="utf-8" />
+  <meta http-equiv="content-language" content="zh-CN" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="renderer" content="webkit">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="applicable-device" content="pc,mobile">
+  <meta name="author" content="" />
+  <meta name="description" content="Windows认证机制学习"/>
+  <meta name="keywords" content=",内网渗透"/>
+  <link rel="icon" href="/static/img/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/img/logo.png" />
+  <link rel="stylesheet" href="/static/css/common.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/theme-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/post.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-light.css?t=20230716172519">
+  <link rel="prefetch" href="/static/xml/search.xml?t=20230716172519">
+  <link rel="prefetch" href="/static/js/search.js?t=20230716172519">
+  <script>
+    window.blog = {
+      baseurl:"",
+      buildAt:"20230716172519",
+      darkTheme: false,
+      setDarkTheme: function (dark) {
+        this.darkTheme = Boolean(dark);
+        document.documentElement.className = this.darkTheme ? 'dark': '';
+        document.querySelector('meta[name=theme-color]').setAttribute('content', this.darkTheme ? '#2D2E32': '#FFFFFF');
+      }
+    }
+    if (sessionStorage.darkTheme !== undefined) {
+      blog.setDarkTheme(sessionStorage.darkTheme === 'true'); // 记忆值，单个窗口内有效
+    } else {
+      blog.setDarkTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); // 跟随系统
+    }
+    if (window.matchMedia) {
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      media.addListener(function (ev) {
+        blog.setDarkTheme(ev.currentTarget.matches);
+        sessionStorage.removeItem('darkTheme');
+      });
+    }
+  </script>
+</head>
+<body ondragstart="return false;">
+<header class="header">
+  <img class="logo" src="/static/img/logo.jpg" alt="logo"/>
+  <nav class="menu">
+    <a href="/" class="hover-underline">首页</a>
+    <a href="/pages/categories" class="hover-underline">归档</a>
+    <a href="/pages/search" class="hover-underline">搜索</a>
+    <a href="/pages/links" class="hover-underline">友链</a>
+    <a href="/pages/about" class="hover-underline">关于</a>
+    </nav>
+</header>
+<div class="page page-post">
+  <h1 class="title" id="Windows认证机制学习">Windows认证机制学习</h1>
+  
+  <div class="subtitle"> 于 2021-12-09 发布</div>
+  
+  <div class="post">
+    <blockquote>
+  <p>Kerberos协议非常复杂，学习时每篇文章都有不同之处，本篇文章查询了MSDN，尽量保证准确性，后续学习过程中如果发现内容有误会及时更正。</p>
+</blockquote>
+
+<h2 id="认证协议">认证协议</h2>
+
+<h3 id="lm">LM</h3>
+
+<p>LAN Manager Challenge/Response 验证机制，简称LM。该方案比NTLM响应时间更早，安全性更低。</p>
+
+<p>认证流程：</p>
+
+<ol>
+  <li>A向B发起请求。</li>
+  <li>B返回一个8字节的响应码。</li>
+  <li>A将自己的LM Hash分成三部分，每组7字节，每组都使用响应码对其进行加密，然后发送给B。</li>
+  <li>然后B也执行和A相同的操作，不过LM Hash是储存在服务器中A的LM Hash。</li>
+  <li>两个LM-Hash进行比较，一致即认证成功。</li>
+</ol>
+
+<h3 id="ntlm">NTLM</h3>
+
+<p>NTLM身份验证采用Challenge/Response机制，由协商、质询、身份验证三步组成。</p>
+
+<p>域环境认证流程：</p>
+
+<ol>
+  <li>用户访问客户端计算机并提供域名、用户名和密码。客户端计算密码的加密哈希并丢弃实际密码。</li>
+  <li>客户端将用户名以明文形式发送到服务器。</li>
+  <li>服务器判断用户名是否存在，存在则生成一个16字节的随机数，称为Challenge或Nonce，并返回给客户端。</li>
+  <li>客户端使用用户密码的Hash对服务器返回的随机数进行加密，并将结果返回给服务器，被称为Response。</li>
+  <li>服务器向域控发送以下三项信息：
+    <ul>
+      <li>用户名</li>
+      <li>发送给客户端的Challenge</li>
+      <li>从客户端收到的Response</li>
+    </ul>
+  </li>
+  <li>域控使用用户名从安全账户管理器数据库中检索用户密码的Hash，并使用此Hash加密Challenge。</li>
+  <li>域控将加密后的Challenge与客户端计算出的Response进行比较，如果相同则认证成功。</li>
+</ol>
+
+<h4 id="net-ntlmv1">Net-NTLMv1</h4>
+
+<p>服务器返回8位Challenge，Response加密算法3DES。</p>
+
+<h4 id="net-ntlmv2">Net-NTLMv2</h4>
+
+<p>从Windows Vista起，默认使用Net-NTLMv2协议。
+服务器返回16位Challenge，Response加密算法HMAC-MD5。</p>
+
+<h3 id="kerberos">Kerberos</h3>
+
+<p>Kerberos协议构成：客户端、服务器、KDC（Key Distribution Center 密钥分发中心）</p>
+
+<h4 id="相关信息">相关信息</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>角色</th>
+      <th>作用</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Key Distributed Centser</td>
+      <td>密钥分发中心，包含AS和TGS两个服务</td>
+    </tr>
+    <tr>
+      <td>Authentication Service</td>
+      <td>身份验证服务，用于KDC对Client认证生成TGT</td>
+    </tr>
+    <tr>
+      <td>Ticket Granting Ticket</td>
+      <td>票据授予票据，用于向KDC获取服务票据的凭证</td>
+    </tr>
+    <tr>
+      <td>Ticket Granting Service</td>
+      <td>票据授予服务，用于KDC为Client生成ST</td>
+    </tr>
+    <tr>
+      <td>Active Directory</td>
+      <td>活动目录，用于存储用户、用户组、域相关的信息</td>
+    </tr>
+    <tr>
+      <td>Server Ticket</td>
+      <td>服务票据，也被称为 TGS Ticket，用于访问服务的凭证</td>
+    </tr>
+    <tr>
+      <td>Application Server</td>
+      <td>应用服务器，提供用户所需服务</td>
+    </tr>
+    <tr>
+      <td>krbtgt</td>
+      <td>密钥发行中心服务帐户，不可登陆，发放票据时会使用它的NTLM Hash</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="认证流程">认证流程</h4>
+
+<h5 id="as_req">AS_REQ</h5>
+
+<p>当域内某个客户端试图访问域内的某个服务，输入用户名密码后，客户端会向AS发送AS_REQ（身份验证服务请求）：</p>
+
+<blockquote>
+  <p>用户名、请求的服务
+请求凭据（使用用户密码Hash加密的时间戳）</p>
+</blockquote>
+
+<h5 id="as_rep">AS_REP</h5>
+
+<p>KDC检查用户是否在本地数据库，存在则使用存储在本地的NTLM Hash解密凭据验证用户身份，如验证通过且时间戳在有效期内（5分钟），则返回AS_REP（身份验证服务回复）：</p>
+
+<blockquote>
+  <p>用户名
+TGT：用户名、会话密钥、TGT有效期、具有用户权限的PAC，使用krbtgt账户NTLM Hash加密
+Session-Key: 使用用户的NTLM Hash加密</p>
+</blockquote>
+
+<p>此时，用户拥有 TGT，可用于请求 TGS，然后访问服务。</p>
+
+<h5 id="tgs_req">TGS_REQ</h5>
+
+<p>客户端收到消息后，使用自己的NTLM Hash解密AS_REP返回的TGT，得到会话密钥。
+然后向TGS发送请求TGS_REQ（票据授予服务请求）：</p>
+
+<blockquote>
+  <p>TGT
+请求服务的SPN
+Authenticator：使用会话密钥加密的用户名、时间戳等信息</p>
+</blockquote>
+
+<h5 id="tgs_rep">TGS_REP</h5>
+
+<p>TGS收到TGS_REQ后，先在KDC中查找服务的SPN是否存在，如存在使用自己的TGS密钥解密TGS_REQ发送的TGT，得到会话密钥。
+使用会话密钥解密TGS_REQ中的Authenticator，验证通过后向客户端发送TGS_REP（票据授予服务回复）：</p>
+
+<blockquote>
+  <p>用户名
+ST（Server Ticket）：用户名、服务会话密钥、票据有效期等信息，使用请求服务的NTLM Hash加密
+使用会话密钥加密的服务会话密钥</p>
+</blockquote>
+
+<h5 id="ap_req">AP_REQ</h5>
+
+<p>客户端使用会话密钥解密TGS，得到服务会话密钥，将ST票据和服务会话密钥缓存到本地。当客户端需要访问某个服务端上的服务时，会向服务端发送AP_REQ（应用程序请求）。</p>
+
+<blockquote>
+  <p>Authenticator：使用服务会话密钥加密的时间戳等信息
+ST</p>
+</blockquote>
+
+<h5 id="ap_rep可选">AP_REP（可选）</h5>
+
+<p>服务端使用自己的NTLM Hash解密ST，获取服务会话密钥、授权用户信息。
+服务端使用服务会话密钥解密Authenticator等信息，与ST对比，通过验证后与客户端进行双向验证（此过程需要开启PAC验证服务，没有配置PAC可能会导致白银票据攻击）：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>双向验证过程：
+1. 服务端验证客户端：
+  i. 服务端发送PAC询问KDC用户有无访问权限。
+  ii. KDC解密PAC通过SID判断用户组信息、权限等返回给服务端。
+  iii. Server收到信息并与请求服务的ACL进行比较，决定是否提供服务。
+
+2. 客户端验证服务端：
+  i. 服务端发送Authenticator（使用服务会话密钥的时间戳）给客户端。
+  ii. 客户端解密成功则证明验证服务会话密钥一致，双向验证通过。
+  iii. 服务端开放服务，客户端访问服务。
+</code></pre></div></div>
+
+<h2 id="加密方式">加密方式</h2>
+
+<p>Windows只保存密码Hash值。<br />
+格式：<code class="highlighter-rouge">Username:RID:LM-Hash:NTLM-Hash</code>（LM-Hash从Windows Vista开始为空）</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>工作组环境用户信息保存在%SystemRoot%\System32\config\SAM
+域环境用户信息保存在域控C:\Windows\NTDS\NTDS.dit
+</code></pre></div></div>
+
+<h3 id="lm-hash">LM Hash</h3>
+
+<p>LM Hash从Windows Vista开始默认禁用。</p>
+
+<p>启用方式：</p>
+
+<p>本地安全策略 =&gt; 本地策略 =&gt; 安全选项，将不储存LAN管理器哈希值改为禁用。</p>
+
+<p>加密过程：</p>
+
+<ol>
+  <li>用户的密码转换为大写，密码转换为16进制字符串，不足14字节将会用0来再后面补全。</li>
+  <li>密码的16进制字符串被分成两个7byte部分。每部分转换成比特流，并且长度位56bit，长度不足使用0在左边补齐长度。</li>
+  <li>再分7bit为一组，每组末尾加0，再组成一组。</li>
+  <li>上步骤得到的二组，分别作为key为KGS!@#$%进行DES加密。</li>
+  <li>将加密后的两组拼接在一起，得到最终LM Hash值。</li>
+</ol>
+
+<p>缺点：</p>
+
+<ol>
+  <li>口令不区分大小写。</li>
+  <li>口令长度最多为14字节，超过14字节使用NTLM Hash。</li>
+  <li>如果没有超过7字节后面8字节是固定的（aad3b435b51404ee）。</li>
+  <li>DES加密key固定（KGS!@#$%）。</li>
+</ol>
+
+<h3 id="ntlm-hash">NTLM Hash</h3>
+
+<p>NTLM Hash是支持Net NTLM认证协议及本地认证过程中的一个重要参与物，其长度为32位，由数字与字母组成。
+可以从Windows系统中的SAM文件和域控的NTDS.dit文件中获得所有用户的Hash，通过Mimikatz读取lsass.exe进程能获得已登录用户的NTLM Hsash。</p>
+
+<p>加密过程：</p>
+
+<ol>
+  <li>将用户密码转换为十六进制格式。</li>
+  <li>将十六进制格式的密码进行Unicode编码。</li>
+  <li>使用MD4摘要算法对Unicode编码数据进行Hash计算。</li>
+</ol>
+
+<h3 id="net-ntlm-hash">Net-NTLM Hash</h3>
+
+<p>指网络环境下的NTLM认证中的Hash，NTLM认证中的Response包含Net-NTLM Hash。
+在NTLM协议中，NTLM响应分为NTLMv1，NTLMv2，NTLM session v2三种协议，不同协议使用不同格式的Challenge和加密算法。</p>
+
+<h4 id="net-ntlmv1-hash">Net-NTLMv1 Hash</h4>
+
+<p>格式：<code class="highlighter-rouge">username::hostname:LM response:NTLM response:challenge</code></p>
+
+<p>修改注册表启用：</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>reg add HKLM\SYSTEM\CurrentControlSet\Control\Lsa\ /v lmcompatibilitylevel /t REG_DWORD /d 2 /f
+reg add HKLM\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0\ /v NtlmMinClientSec /t REG_DWORD /d 536870912 /f
+reg add HKLM\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0\ /v RestrictSendingNTLMTraffic /t REG_DWORD /d 0 /
+</code></pre></div></div>
+
+<p>8位Challenge，Response加密算法3DES。
+这种方式相对脆弱，可以基于抓包工具和彩虹表爆破工具进行破解。</p>
+
+<h4 id="net-ntlmv2-hash">Net-NTLMv2 Hash</h4>
+
+<p>格式：<code class="highlighter-rouge">username::domain:challenge:HMAC-MD5:blob</code></p>
+
+<p>16位Challenge，Response加密算法HMAC-MD5。</p>
+
+<h2 id="参考链接">参考链接</h2>
+
+<p>https://xz.aliyun.com/t/8187<br />
+https://xz.aliyun.com/t/10491<br />
+https://www.t00ls.cc/thread-63319-1-1.html<br />
+https://websec.readthedocs.io/zh/latest/auth/index.html<br />
+https://docs.microsoft.com/zh-cn/archive/blogs/apgceps/packerberos-2</p>
+
+  </div>
+  
+</div>
+<footer class="footer">
+  <span></span>
+  <span text-align: center>Copyright © 2021 fuzz7j</span>
+</footer>
+<div id="to-top">
+  <span></span>
+  <span></span>
+</div><script type="text/javascript" src="/static/js/blog.js?t=20230716172519"></script>
+<script type="text/javascript" src="/static/js/search.js?t=20230716172519"></script></body>
+</html>

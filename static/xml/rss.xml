@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>fuzz7j's Blog</title>
+    <link>https://fuzz7j.github.io/</link>
+    <description>fuzz7j's Blog</description>
+    <language>zh-CN</language>
+    <pubDate>Sun, 16 Jul 2023 17:25:19 +0800</pubDate>
+    <lastBuildDate>Sun, 16 Jul 2023 17:25:19 +0800</lastBuildDate>
+    <generator>Jekyll v3.8.5</generator>
+    <atom:link href="https://fuzz7j.github.io//static/xml/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>BeanShell注入内存马</title>
+      <link>https://fuzz7j.github.io//articles/BeanShell/</link>
+      <description>背景项目遇到用友NC只存在BeanShell远程代码执行漏洞，写入jsp访问404，尝试通过BeanShell注入内存马，本篇文章主要记录过程中遇到的一些问题。request对象通过java-object-searcher获取requ...</description>
+      <pubDate>Mon, 03 Apr 2023 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/BeanShell/</gui>
+    </item>
+    <item>
+      <title>FineReport v10反序列化漏洞挖掘</title>
+      <link>https://fuzz7j.github.io//articles/FineReport-v10/</link>
+      <description>前言hw期间拿到的漏洞，修改exp的计划拖了很久，趁年底尝试一下从0到1进行挖掘。漏洞挖掘过程查看com.fr.decision.base.DecisionServletInitializer#start发现加载配置类Decision...</description>
+      <pubDate>Thu, 19 Jan 2023 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/FineReport-v10/</gui>
+    </item>
+    <item>
+      <title>FineReport后台GetShell另类利用</title>
+      <link>https://fuzz7j.github.io//articles/FineReport-GetShell/</link>
+      <description>前言最近在项目中遇到了FineReport后台上传插件时数据包过大上传失败，但内部扫描器的POC却能检测到漏洞，所以找了很久旧版本安装包来分析一下代码。漏洞分析插件上传在com.fr.fs.plugin.op.web.action.I...</description>
+      <pubDate>Thu, 18 Aug 2022 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/FineReport-GetShell/</gui>
+    </item>
+    <item>
+      <title>MySQL JDBC客户端反序列化漏洞分析</title>
+      <link>https://fuzz7j.github.io//articles/MySQL-JDBC-Deserialization/</link>
+      <description>前言BlackHatEurope2019《NewExploitTechniqueInJavaDeserializationAttack》议题学习。JavaDataBaseConnectivityJDBC（JavaDatabaseCon...</description>
+      <pubDate>Fri, 27 May 2022 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/MySQL-JDBC-Deserialization/</gui>
+    </item>
+    <item>
+      <title>CVE-2022-22965学习</title>
+      <link>https://fuzz7j.github.io//articles/Spring4Shell/</link>
+      <description>前言此漏洞源于云舒的一条微博，不过其实并没有达到“核弹级”，顶多是个手榴弹。因为之前没有接触过Autobinding漏洞，正好学习一下，SpringMVC自动绑定漏洞参考这篇文章：浅析自动绑定漏洞之SpringMVCCVE-2010-...</description>
+      <pubDate>Sun, 03 Apr 2022 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/Spring4Shell/</gui>
+    </item>
+    <item>
+      <title>Windows认证机制学习</title>
+      <link>https://fuzz7j.github.io//articles/Windows-Authorization/</link>
+      <description>Kerberos协议非常复杂，学习时每篇文章都有不同之处，本篇文章查询了MSDN，尽量保证准确性，后续学习过程中如果发现内容有误会及时更正。认证协议LMLANManagerChallenge/Response验证机制，简称LM。该方案...</description>
+      <pubDate>Thu, 09 Dec 2021 00:00:00 +0800</pubDate>
+      <gui>https://fuzz7j.github.io//articles/Windows-Authorization/</gui>
+    </item>
+  </channel>
+</rss>

